@@ -1,0 +1,1268 @@
+/* --- Base Styles --- */
+:root {
+    --background-color: #f8f9fa;
+    --text-color: #343a40;
+    --primary-color: #007bff; /* A nice blue */
+    --secondary-color: #6c757d; /* Grey for subtle elements */
+    --highlight-color: #28a745; /* A vibrant green for highlights */
+    --navbar-bg: #ffffff;
+    --footer-bg: #e9ecef;
+    --box-shadow: rgba(0, 0, 0, 0.08);
+}
+
+/* Dark theme variables */
+[data-theme="dark"] {
+    --background-color: #212529;
+    --text-color: #e9ecef;
+    --primary-color: #66b8ff; /* Lighter blue for dark theme */
+    --secondary-color: #adb5bd;
+    --highlight-color: #28a745; /* Can keep same or adjust */
+    --navbar-bg: #2b3035;
+    --footer-bg: #343a40;
+    --box-shadow: rgba(0, 0, 0, 0.4);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Header & Navbar --- */
+header {
+    background-color: var(--navbar-bg);
+    box-shadow: 0 2px 10px var(--box-shadow);
+    padding: 1rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.navbar .logo {
+    height: 40px; /* Adjust as needed */
+    width: auto;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 25px; /* Space between links */
+}
+
+.nav-links li a {
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: 500;
+    padding: 5px 0;
+    position: relative;
+    transition: color 0.3s ease;
+}
+
+.nav-links li a::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: -5px;
+    left: 0;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease-in-out;
+}
+
+.nav-links li a:hover {
+    color: var(--primary-color);
+}
+
+.nav-links li a:hover::after,
+.nav-links li a.active::after { /* Add active class styling later if needed */
+    width: 100%;
+}
+
+#themeToggle {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: transform 0.2s ease;
+    padding: 5px;
+    border-radius: 5px;
+}
+
+#themeToggle:hover {
+    transform: scale(1.1);
+    background-color: rgba(0,0,0,0.05); /* Light hover effect */
+}
+
+/* Hamburger Menu Icon */
+.menu-toggle {
+    display: none; /* Hidden by default on desktop */
+    flex-direction: column;
+    justify-content: space-between;
+    width: 30px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.menu-toggle span {
+    display: block;
+    width: 100%;
+    height: 3px;
+    background-color: var(--text-color);
+    border-radius: 5px;
+    transition: all 0.3s ease-in-out;
+}
+
+.menu-toggle.active span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+}
+
+.menu-toggle.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.menu-toggle.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+
+
+/* --- Main Content --- */
+main.home {
+    flex-grow: 1; /* Allows main to take up available space */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4rem 20px; /* Increased padding for better spacing */
+}
+
+main.home h1 {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+    line-height: 1.2;
+}
+
+main.home p {
+    font-size: 1.3rem;
+    max-width: 700px;
+    margin-bottom: 2rem;
+    color: var(--secondary-color);
+}
+
+.highlight {
+    color: var(--highlight-color);
+    font-weight: 700;
+}
+
+.btn {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    padding: 15px 30px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.1rem;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+}
+
+.btn:hover {
+    background-color: #0056b3; /* Darker shade of primary */
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 123, 255, 0.4);
+}
+
+/* --- Footer --- */
+footer {
+    background-color: var(--footer-bg);
+    color: var(--text-color);
+    text-align: center;
+    padding: 1.5rem 20px;
+    font-size: 0.9rem;
+    box-shadow: 0 -2px 10px var(--box-shadow);
+}
+
+
+/* --- Media Queries for Responsiveness --- */
+
+/* For screens smaller than 768px (common tablet/mobile breakpoint) */
+@media (max-width: 768px) {
+    .navbar {
+        flex-wrap: wrap; /* Allow items to wrap */
+        justify-content: space-between;
+    }
+
+    .navbar .logo {
+        height: 35px; /* Slightly smaller logo on mobile */
+    }
+
+    .nav-links {
+        flex-direction: column;
+        width: 100%;
+        text-align: center;
+        background-color: var(--navbar-bg);
+        box-shadow: 0 5px 10px var(--box-shadow);
+        position: absolute;
+        top: 70px; /* Below the navbar */
+        left: 0;
+        right: 0;
+        transform: translateY(-150%); /* Hide by default */
+        transition: transform 0.3s ease-in-out;
+        padding: 20px 0;
+        z-index: 999; /* Ensure it's above other content but below header */
+    }
+
+    .nav-links.active {
+        transform: translateY(0); /* Show when active */
+    }
+
+    .nav-links li {
+        margin: 10px 0;
+    }
+
+    .nav-links li a {
+        font-size: 1.1rem;
+    }
+
+    .menu-toggle {
+        display: flex; /* Show hamburger menu */
+        margin-right: 15px; /* Space between toggle and theme button */
+    }
+
+    #themeToggle {
+        order: 1; /* Position theme toggle at the end of the flex container */
+    }
+
+    main.home {
+        padding: 3rem 15px;
+    }
+
+    main.home h1 {
+        font-size: 2.5rem; /* Smaller heading for mobile */
+    }
+
+    main.home p {
+        font-size: 1rem; /* Smaller paragraph for mobile */
+    }
+
+    .btn {
+        padding: 12px 25px;
+        font-size: 1rem;
+    }
+}
+
+/* For even smaller screens (e.g., small phones) */
+@media (max-width: 480px) {
+    main.home h1 {
+        font-size: 2rem;
+    }
+
+    main.home p {
+        font-size: 0.9rem;
+    }
+}
+/* ... (existing CSS for body, header, navbar, etc.) ... */
+
+/* --- Main Content (General Pages) --- */
+main.content-page {
+    flex-grow: 1; /* Allows main to take up available space */
+    max-width: 900px; /* Max width for content */
+    margin: 3rem auto; /* Center content with vertical margin */
+    padding: 0 20px; /* Horizontal padding for responsiveness */
+    line-height: 1.8; /* Better readability for text blocks */
+}
+
+main.content-page h1 {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
+    text-align: center;
+}
+
+main.content-page p {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+/* ... (existing CSS for highlight, btn, footer, and media queries) ... */
+
+/* Additional Media Queries for Content Pages */
+@media (max-width: 768px) {
+    main.content-page {
+        margin: 2rem auto;
+        padding: 0 15px;
+    }
+
+    main.content-page h1 {
+        font-size: 2rem;
+        text-align: left; /* Adjust heading alignment on small screens */
+    }
+
+    main.content-page p {
+        font-size: 0.95rem;
+    }
+}
+/* ... (existing CSS for body, header, navbar, main.home, main.content-page, etc.) ... */
+
+/* --- Main Content (Features Page) --- */
+main.features-page {
+    flex-grow: 1;
+    padding: 3rem 20px;
+    max-width: 1200px; /* Wider content area for grid */
+    margin: 0 auto;
+    text-align: center; /* Center the heading */
+}
+
+main.features-page h1 {
+    font-size: 3rem;
+    margin-bottom: 3rem; /* More space below heading */
+    color: var(--primary-color);
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Responsive grid columns */
+    gap: 30px; /* Space between grid items */
+    padding-bottom: 3rem; /* Space before footer */
+}
+
+.feature-item {
+    background-color: var(--navbar-bg); /* Use navbar background for cards */
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 5px 15px var(--box-shadow); /* Soft shadow */
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex; /* Flex for content inside item */
+    flex-direction: column;
+    align-items: center; /* Center text/icon */
+    text-align: center;
+}
+
+.feature-item:hover {
+    transform: translateY(-5px); /* Lift effect on hover */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); /* Stronger shadow on hover */
+}
+
+.feature-item h3 {
+    font-size: 1.5rem;
+    color: var(--highlight-color); /* Highlight color for feature titles */
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Space between icon and text */
+}
+
+.feature-item h3::before {
+    /* You can use actual icons here or just let the text lead */
+    /* For example, if you add an icon font or SVG */
+}
+
+.feature-item p {
+    font-size: 1rem;
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+
+/* --- Media Queries for Features Page --- */
+
+@media (max-width: 768px) {
+    main.features-page {
+        padding: 2rem 15px;
+    }
+
+    main.features-page h1 {
+        font-size: 2.2rem;
+        margin-bottom: 2rem;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr; /* Stack items on small screens */
+        gap: 20px;
+    }
+
+    .feature-item {
+        padding: 20px;
+    }
+
+    .feature-item h3 {
+        font-size: 1.3rem;
+    }
+
+    .feature-item p {
+        font-size: 0.95rem;
+    }
+}
+
+@media (max-width: 480px) {
+    main.features-page h1 {
+        font-size: 1.8rem;
+    }
+}
+/* ... (existing CSS for body, header, navbar, main.home, main.content-page, main.features-page, etc.) ... */
+
+/* --- Token Page Specifics --- */
+.token-info-card {
+    background-color: var(--navbar-bg); /* Use navbar background for the card */
+    border-left: 5px solid var(--highlight-color); /* A subtle highlight on the side */
+    border-radius: 8px;
+    padding: 25px 30px;
+    margin: 2rem auto 3rem auto; /* Center the card and give it good vertical spacing */
+    max-width: 500px; /* Limit card width for better appearance */
+    box-shadow: 0 4px 12px var(--box-shadow);
+    text-align: left; /* Ensure text inside is left-aligned */
+}
+
+.token-info-card h2 {
+    font-size: 1.8rem;
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--footer-bg); /* Subtle line below heading */
+    padding-bottom: 10px;
+}
+
+.token-info-card p {
+    font-size: 1.05rem;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.token-info-card p strong {
+    color: var(--highlight-color); /* Make the labels stand out */
+}
+
+.note-text {
+    font-size: 0.95rem;
+    color: var(--secondary-color);
+    font-style: italic;
+    margin-top: 2rem; /* Add space above the note */
+    text-align: center; /* Center the note text */
+    max-width: 600px; /* Constrain width for readability */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* --- Media Queries for Token Page --- */
+@media (max-width: 768px) {
+    .token-info-card {
+        margin: 1.5rem 15px 2rem 15px; /* Adjust margin for mobile */
+        padding: 20px 25px;
+    }
+
+    .token-info-card h2 {
+        font-size: 1.5rem;
+    }
+
+    .token-info-card p {
+        font-size: 1rem;
+    }
+
+    .note-text {
+        margin-top: 1.5rem;
+        padding: 0 15px; /* Add horizontal padding to the note */
+    }
+}
+/* ... (existing CSS for body, header, navbar, main.home, main.content-page, main.features-page, main.token-page, etc.) ... */
+
+/* --- Contact Page Specifics --- */
+main.content-page .intro-text {
+    text-align: center;
+    font-size: 1.15rem;
+    margin-bottom: 3rem; /* More space before contact methods */
+    color: var(--secondary-color);
+}
+
+.contact-methods {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsive grid for contact items */
+    gap: 30px; /* Space between contact items */
+    margin-bottom: 3rem; /* Space before footer/next section */
+}
+
+.contact-item {
+    background-color: var(--navbar-bg); /* Card-like background */
+    border-radius: 10px;
+    padding: 30px 20px;
+    box-shadow: 0 4px 10px var(--box-shadow);
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.contact-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.contact-item .icon {
+    font-size: 3rem; /* Large icon size */
+    color: var(--highlight-color);
+    margin-bottom: 15px;
+}
+
+.contact-item h3 {
+    font-size: 1.4rem;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.contact-item p a {
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.contact-item p a:hover {
+    color: var(--primary-color);
+}
+
+/* Optional: Contact Form Styling */
+/*
+.contact-form-section {
+    max-width: 600px;
+    margin: 3rem auto 0 auto;
+    background-color: var(--navbar-bg);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px var(--box-shadow);
+    text-align: center;
+}
+
+.contact-form-section h2 {
+    font-size: 2rem;
+    color: var(--primary-color);
+    margin-bottom: 2rem;
+}
+
+.contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.contact-form input,
+.contact-form textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--footer-bg);
+    border-radius: 5px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.contact-form input:focus,
+.contact-form textarea:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.contact-form textarea {
+    resize: vertical;
+}
+
+.contact-form .btn {
+    width: auto;
+    align-self: center;
+    margin-top: 15px;
+}
+*/
+
+/* --- Media Queries for Contact Page --- */
+@media (max-width: 768px) {
+    main.content-page .intro-text {
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .contact-methods {
+        grid-template-columns: 1fr; /* Stack items on small screens */
+        gap: 20px;
+    }
+
+    .contact-item {
+        padding: 25px 15px;
+    }
+
+    .contact-item .icon {
+        font-size: 2.5rem;
+    }
+
+    .contact-item h3 {
+        font-size: 1.2rem;
+    }
+
+    .contact-item p a {
+        font-size: 0.95rem;
+    }
+
+    /* Optional form media query */
+    /*
+    .contact-form-section {
+        margin: 2rem auto 0 auto;
+        padding: 25px;
+    }
+    */
+}
+/* --- Base Styles --- */
+:root {
+    --background-color: #f8f9fa;
+    --text-color: #343a40;
+    --primary-color: #007bff; /* A nice blue */
+    --secondary-color: #6c757d; /* Grey for subtle elements */
+    --highlight-color: #28a745; /* A vibrant green for highlights */
+    --navbar-bg: #ffffff;
+    --footer-bg: #e9ecef;
+    --box-shadow: rgba(0, 0, 0, 0.08);
+}
+
+/* Dark theme variables */
+[data-theme="dark"] {
+    --background-color: #212529;
+    --text-color: #e9ecef;
+    --primary-color: #66b8ff; /* Lighter blue for dark theme */
+    --secondary-color: #adb5bd;
+    --highlight-color: #28a745; /* Can keep same or adjust */
+    --navbar-bg: #2b3035;
+    --footer-bg: #343a40;
+    --box-shadow: rgba(0, 0, 0, 0.4);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Header & Navbar --- */
+header {
+    background-color: var(--navbar-bg);
+    box-shadow: 0 2px 10px var(--box-shadow);
+    padding: 1rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.navbar .logo {
+    height: 40px; /* Adjust as needed */
+    width: auto;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 25px; /* Space between links */
+}
+
+.nav-links li a {
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: 500;
+    padding: 5px 0;
+    position: relative;
+    transition: color 0.3s ease;
+}
+
+.nav-links li a::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: -5px;
+    left: 0;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease-in-out;
+}
+
+.nav-links li a:hover {
+    color: var(--primary-color);
+}
+
+.nav-links li a:hover::after,
+.nav-links li a.active::after { /* Add active class styling later if needed */
+    width: 100%;
+}
+
+#themeToggle {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: transform 0.2s ease;
+    padding: 5px;
+    border-radius: 5px;
+}
+
+#themeToggle:hover {
+    transform: scale(1.1);
+    background-color: rgba(0,0,0,0.05); /* Light hover effect */
+}
+
+/* Hamburger Menu Icon */
+.menu-toggle {
+    display: none; /* Hidden by default on desktop */
+    flex-direction: column;
+    justify-content: space-between;
+    width: 30px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.menu-toggle span {
+    display: block;
+    width: 100%;
+    height: 3px;
+    background-color: var(--text-color);
+    border-radius: 5px;
+    transition: all 0.3s ease-in-out;
+}
+
+.menu-toggle.active span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+}
+
+.menu-toggle.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.menu-toggle.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+
+
+/* --- Main Content --- */
+main.home {
+    flex-grow: 1; /* Allows main to take up available space */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4rem 20px; /* Increased padding for better spacing */
+}
+
+main.home h1 {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+    line-height: 1.2;
+}
+
+main.home p {
+    font-size: 1.3rem;
+    max-width: 700px;
+    margin-bottom: 2rem;
+    color: var(--secondary-color);
+}
+
+.highlight {
+    color: var(--highlight-color);
+    font-weight: 700;
+}
+
+.btn {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    padding: 15px 30px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.1rem;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+}
+
+.btn:hover {
+    background-color: #0056b3; /* Darker shade of primary */
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 123, 255, 0.4);
+}
+
+/* --- Footer --- */
+footer {
+    background-color: var(--footer-bg);
+    color: var(--text-color);
+    text-align: center;
+    padding: 1.5rem 20px;
+    font-size: 0.9rem;
+    box-shadow: 0 -2px 10px var(--box-shadow);
+}
+
+
+/* --- Media Queries for Responsiveness --- */
+
+/* For screens smaller than 768px (common tablet/mobile breakpoint) */
+@media (max-width: 768px) {
+    .navbar {
+        flex-wrap: wrap; /* Allow items to wrap */
+        justify-content: space-between;
+    }
+
+    .navbar .logo {
+        height: 35px; /* Slightly smaller logo on mobile */
+    }
+
+    .nav-links {
+        flex-direction: column;
+        width: 100%;
+        text-align: center;
+        background-color: var(--navbar-bg);
+        box-shadow: 0 5px 10px var(--box-shadow);
+        position: absolute;
+        top: 70px; /* Below the navbar */
+        left: 0;
+        right: 0;
+        transform: translateY(-150%); /* Hide by default */
+        transition: transform 0.3s ease-in-out;
+        padding: 20px 0;
+        z-index: 999; /* Ensure it's above other content but below header */
+    }
+
+    .nav-links.active {
+        transform: translateY(0); /* Show when active */
+    }
+
+    .nav-links li {
+        margin: 10px 0;
+    }
+
+    .nav-links li a {
+        font-size: 1.1rem;
+    }
+
+    .menu-toggle {
+        display: flex; /* Show hamburger menu */
+        margin-right: 15px; /* Space between toggle and theme button */
+    }
+
+    #themeToggle {
+        order: 1; /* Position theme toggle at the end of the flex container */
+    }
+
+    main.home {
+        padding: 3rem 15px;
+    }
+
+    main.home h1 {
+        font-size: 2.5rem; /* Smaller heading for mobile */
+    }
+
+    main.home p {
+        font-size: 1rem; /* Smaller paragraph for mobile */
+    }
+
+    .btn {
+        padding: 12px 25px;
+        font-size: 1rem;
+    }
+}
+
+/* For even smaller screens (e.g., small phones) */
+@media (max-width: 480px) {
+    main.home h1 {
+        font-size: 2rem;
+    }
+
+    main.home p {
+        font-size: 0.9rem;
+    }
+}
+/* ... (existing CSS for body, header, navbar, etc.) ... */
+
+/* --- Main Content (General Pages) --- */
+main.content-page {
+    flex-grow: 1; /* Allows main to take up available space */
+    max-width: 900px; /* Max width for content */
+    margin: 3rem auto; /* Center content with vertical margin */
+    padding: 0 20px; /* Horizontal padding for responsiveness */
+    line-height: 1.8; /* Better readability for text blocks */
+}
+
+main.content-page h1 {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
+    text-align: center;
+}
+
+main.content-page p {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+/* ... (existing CSS for highlight, btn, footer, and media queries) ... */
+
+/* Additional Media Queries for Content Pages */
+@media (max-width: 768px) {
+    main.content-page {
+        margin: 2rem auto;
+        padding: 0 15px;
+    }
+
+    main.content-page h1 {
+        font-size: 2rem;
+        text-align: left; /* Adjust heading alignment on small screens */
+    }
+
+    main.content-page p {
+        font-size: 0.95rem;
+    }
+}
+/* ... (existing CSS for body, header, navbar, main.home, main.content-page, etc.) ... */
+
+/* --- Main Content (Features Page) --- */
+main.features-page {
+    flex-grow: 1;
+    padding: 3rem 20px;
+    max-width: 1200px; /* Wider content area for grid */
+    margin: 0 auto;
+    text-align: center; /* Center the heading */
+}
+
+main.features-page h1 {
+    font-size: 3rem;
+    margin-bottom: 3rem; /* More space below heading */
+    color: var(--primary-color);
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Responsive grid columns */
+    gap: 30px; /* Space between grid items */
+    padding-bottom: 3rem; /* Space before footer */
+}
+
+.feature-item {
+    background-color: var(--navbar-bg); /* Use navbar background for cards */
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 5px 15px var(--box-shadow); /* Soft shadow */
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex; /* Flex for content inside item */
+    flex-direction: column;
+    align-items: center; /* Center text/icon */
+    text-align: center;
+}
+
+.feature-item:hover {
+    transform: translateY(-5px); /* Lift effect on hover */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); /* Stronger shadow on hover */
+}
+
+.feature-item h3 {
+    font-size: 1.5rem;
+    color: var(--highlight-color); /* Highlight color for feature titles */
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Space between icon and text */
+}
+
+.feature-item h3::before {
+    /* You can use actual icons here or just let the text lead */
+    /* For example, if you add an icon font or SVG */
+}
+
+.feature-item p {
+    font-size: 1rem;
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+
+/* --- Media Queries for Features Page --- */
+
+@media (max-width: 768px) {
+    main.features-page {
+        padding: 2rem 15px;
+    }
+
+    main.features-page h1 {
+        font-size: 2.2rem;
+        margin-bottom: 2rem;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr; /* Stack items on small screens */
+        gap: 20px;
+    }
+
+    .feature-item {
+        padding: 20px;
+    }
+
+    .feature-item h3 {
+        font-size: 1.3rem;
+    }
+
+    .feature-item p {
+        font-size: 0.95rem;
+    }
+}
+
+@media (max-width: 480px) {
+    main.features-page h1 {
+        font-size: 1.8rem;
+    }
+}
+/* ... (existing CSS for body, header, navbar, main.home, main.content-page, main.features-page, etc.) ... */
+
+/* --- Token Page Specifics --- */
+.token-info-card {
+    background-color: var(--navbar-bg); /* Use navbar background for the card */
+    border-left: 5px solid var(--highlight-color); /* A subtle highlight on the side */
+    border-radius: 8px;
+    padding: 25px 30px;
+    margin: 2rem auto 3rem auto; /* Center the card and give it good vertical spacing */
+    max-width: 500px; /* Limit card width for better appearance */
+    box-shadow: 0 4px 12px var(--box-shadow);
+    text-align: left; /* Ensure text inside is left-aligned */
+}
+
+.token-info-card h2 {
+    font-size: 1.8rem;
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--footer-bg); /* Subtle line below heading */
+    padding-bottom: 10px;
+}
+
+.token-info-card p {
+    font-size: 1.05rem;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.token-info-card p strong {
+    color: var(--highlight-color); /* Make the labels stand out */
+}
+
+.note-text {
+    font-size: 0.95rem;
+    color: var(--secondary-color);
+    font-style: italic;
+    margin-top: 2rem; /* Add space above the note */
+    text-align: center; /* Center the note text */
+    max-width: 600px; /* Constrain width for readability */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* --- Media Queries for Token Page --- */
+@media (max-width: 768px) {
+    .token-info-card {
+        margin: 1.5rem 15px 2rem 15px; /* Adjust margin for mobile */
+        padding: 20px 25px;
+    }
+
+    .token-info-card h2 {
+        font-size: 1.5rem;
+    }
+
+    .token-info-card p {
+        font-size: 1rem;
+    }
+
+    .note-text {
+        margin-top: 1.5rem;
+        padding: 0 15px; /* Add horizontal padding to the note */
+    }
+}
+/* ... (existing CSS for body, header, navbar, main.home, main.content-page, main.features-page, main.token-page, etc.) ... */
+
+/* --- Contact Page Specifics --- */
+main.content-page .intro-text {
+    text-align: center;
+    font-size: 1.15rem;
+    margin-bottom: 3rem; /* More space before contact methods */
+    color: var(--secondary-color);
+}
+
+.contact-methods {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsive grid for contact items */
+    gap: 30px; /* Space between contact items */
+    margin-bottom: 3rem; /* Space before footer/next section */
+}
+
+.contact-item {
+    background-color: var(--navbar-bg); /* Card-like background */
+    border-radius: 10px;
+    padding: 30px 20px;
+    box-shadow: 0 4px 10px var(--box-shadow);
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.contact-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.contact-item .icon {
+    font-size: 3rem; /* Large icon size */
+    color: var(--highlight-color);
+    margin-bottom: 15px;
+}
+
+.contact-item h3 {
+    font-size: 1.4rem;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.contact-item p a {
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.contact-item p a:hover {
+    color: var(--primary-color);
+}
+
+/* Optional: Contact Form Styling */
+/*
+.contact-form-section {
+    max-width: 600px;
+    margin: 3rem auto 0 auto;
+    background-color: var(--navbar-bg);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px var(--box-shadow);
+    text-align: center;
+}
+
+.contact-form-section h2 {
+    font-size: 2rem;
+    color: var(--primary-color);
+    margin-bottom: 2rem;
+}
+
+.contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.contact-form input,
+.contact-form textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--footer-bg);
+    border-radius: 5px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.contact-form input:focus,
+.contact-form textarea:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.contact-form textarea {
+    resize: vertical;
+}
+
+.contact-form .btn {
+    width: auto;
+    align-self: center;
+    margin-top: 15px;
+}
+*/
+
+/* --- Media Queries for Contact Page --- */
+@media (max-width: 768px) {
+    main.content-page .intro-text {
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .contact-methods {
+        grid-template-columns: 1fr; /* Stack items on small screens */
+        gap: 20px;
+    }
+
+    .contact-item {
+        padding: 25px 15px;
+    }
+
+    .contact-item .icon {
+        font-size: 2.5rem;
+    }
+
+    .contact-item h3 {
+        font-size: 1.2rem;
+    }
+
+    .contact-item p a {
+        font-size: 0.95rem;
+    }
+
+    /* Optional form media query */
+    /*
+    .contact-form-section {
+        margin: 2rem auto 0 auto;
+        padding: 25px;
+    }
+    */
+}
