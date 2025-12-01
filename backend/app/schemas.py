@@ -28,7 +28,8 @@ class UserProfile(BaseModel):
     class Config:
         from_attributes = True
 
-class WalletBalance(BaseModel):
+# 🟢 FIX: Renamed from WalletBalance to TokenBalance to resolve Vercel crash
+class TokenBalance(BaseModel):
     token_balance: int
 
 class UserStats(BaseModel):
