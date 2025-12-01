@@ -86,6 +86,18 @@ def get_profile(current_user: models.User = Depends(auth.get_current_user)):
     """Returns the full user profile, including is_admin status."""
     return current_user
 
+# 🟢 NEW ENDPOINT: User Stats (Fixes 404 for /api/user/stats)
+@app.get("/user/stats")
+def get_user_stats(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+    """Placeholder for fetching user completion stats (lessons, quizzes)."""
+    # Return minimal default values to prevent frontend crash
+    return {
+        "lessons_completed": 0,
+        "quizzes_taken": 0,
+        "total_rewards": 0
+    }
+# ----------------------------------------------------
+
 @app.get("/leaderboard", response_model=List[schemas.LeaderboardEntry])
 def get_leaderboard(db: Session = Depends(database.get_db)):
     results = db.query(models.User.name, models.Wallet.token_balance)\
@@ -245,7 +257,20 @@ def submit_quiz(submission: schemas.QuizSubmitRequest, db: Session = Depends(dat
         "tokens_awarded": tokens_awarded
     }
 
+# ----------------------------------------------------
 # --- 3.4 Rewards ---
+# ----------------------------------------------------
+
+# 🟢 NEW ENDPOINT: Wallet Balance (Fixes 404 for /api/wallet/balance)
+@app.get("/wallet/balance", response_model=schemas.TokenBalance)
+def get_wallet_balance(current_user: schemas.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+    """Fetches the token balance for the current user."""
+    # Note: current_user model instance has direct access to the wallet relationship
+    if not current_user.wallet:
+        raise HTTPException(status_code=404, detail="Wallet not found")
+
+    return {"token_balance": current_user.wallet.token_balance}
+# ----------------------------------------------------
 
 @app.get("/rewards/history", response_model=List[schemas.RewardHistory])
 def reward_history(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
