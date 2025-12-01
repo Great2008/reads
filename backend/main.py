@@ -274,7 +274,7 @@ def submit_quiz(submission: schemas.QuizSubmitRequest, db: Session = Depends(dat
 
 # 🟢 NEW ENDPOINT: Wallet Balance (Fixes 404 for /api/wallet/balance)
 @app.get("/wallet/balance", response_model=schemas.TokenBalance)
-def get_wallet_balance(current_user: schemas.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+def get_wallet_balance(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
     """Fetches the token balance for the current user."""
     # Note: current_user model instance has direct access to the wallet relationship
     if not current_user.wallet:
