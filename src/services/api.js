@@ -19,10 +19,12 @@ const handleFailedResponse = async (res, action) => {
     } catch (e) {
         // Fallback for Vercel 500 HTML page or other non-JSON errors
         const text = await res.text();
-        errorDetail = `${errorDetail}. Server response: ${text.substring(0, 100)}...`;
+        // Fallback for non-JSON errors (e.g., Vercel's internal 500 HTML page)
+        errorDetail = `${errorDetail}. Server response: ${text.substring(0, 100)}...`; 
     }
     
-    // Use alert() for immediate feedback to the user on failure
+    // NOTE: Using a custom modal/toast is preferred over alert() in a real app,
+    // but for quick debugging here, we'll keep the direct feedback for now.
     alert(`${action} Failed: ${errorDetail}`); 
     throw new Error(errorDetail);
 }
@@ -123,13 +125,15 @@ export const api = {
                 duration: '15 min' // Hardcoded duration for display
             }));
         },
+        // 🛑 FIX: The backend route is /lessons/{lessonId}, not /lesson/{lessonId}
         getLessonDetail: async (lessonId) => {
-            const res = await fetch(`${API_URL}/lesson/${lessonId}`, { headers: getAuthHeader() });
+            const res = await fetch(`${API_URL}/lessons/${lessonId}`, { headers: getAuthHeader() });
             if (!res.ok) return null;
             return res.json();
         },
+        // 🛑 FIX: The backend route is /lessons/{lessonId}/quiz, not /quiz/lesson/{lessonId}
         getQuizQuestions: async (lessonId) => {
-            const res = await fetch(`${API_URL}/quiz/lesson/${lessonId}`, { headers: getAuthHeader() });
+            const res = await fetch(`${API_URL}/lessons/${lessonId}/quiz`, { headers: getAuthHeader() });
             if (!res.ok) return [];
             return res.json();
         },
@@ -170,5 +174,49 @@ export const api = {
                 type: 'Reward'
             }));
         }
+    },
+    
+    // 🟢 NEW: ADMIN ENDPOINTS (Fixes getUsers undefined error)
+    admin: {
+        getUsers: async () => {
+            const res = await fetch(`${API_URL}/admin/users`, { headers: getAuthHeader() });
+            if (!res.ok) {
+                await handleFailedResponse(res, 'Fetch Users (Admin)');
+            }
+            return res.json();
+        },
+        promoteUser: async (userId, isAdmin) => {
+            const res = await fetch(`${API_URL}/admin/users/${userId}/promote?is_admin=${isAdmin}`, {
+                method: 'PUT',
+                headers: getAuthHeader(),
+            });
+            if (!res.ok) {
+                await handleFailedResponse(res, isAdmin ? 'Promote User' : 'Demote User');
+            }
+            return res.json();
+        },
+        createLesson: async (lessonData) => {
+            const res = await fetch(`${API_URL}/admin/lessons`, {
+                method: 'POST',
+                headers: getAuthHeader(),
+                body: JSON.stringify(lessonData)
+            });
+            if (!res.ok) {
+                await handleFailedResponse(res, 'Create Lesson');
+            }
+            return res.json();
+        },
+        addQuizQuestions: async (quizRequest) => {
+            const res = await fetch(`${API_URL}/admin/quiz`, {
+                method: 'POST',
+                headers: getAuthHeader(),
+                body: JSON.stringify(quizRequest)
+            });
+            if (!res.ok) {
+                await handleFailedResponse(res, 'Add Quiz Questions');
+            }
+            return res.json();
+        }
     }
 };
+
