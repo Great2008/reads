@@ -68,6 +68,10 @@ def signup(user_in: schemas.UserCreate, db: Session = Depends(database.get_db)):
     new_wallet = models.Wallet(user_id=new_user.id, token_balance=0)
     db.add(new_wallet)
     db.commit()
+    
+    # 🟢 CRITICAL FIX for 500 Error: Refresh the user object again after creating the wallet
+    # This ensures the new_user object has its 'wallet' relationship loaded before exiting.
+    db.refresh(new_user)
 
     access_token = auth.create_access_token(data={"sub": str(new_user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -82,9 +86,16 @@ def login(user_credentials: schemas.UserLogin, db: Session = Depends(database.ge
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/user/profile", response_model=schemas.UserProfile)
-def get_profile(current_user: models.User = Depends(auth.get_current_user)):
-    """Returns the full user profile, including is_admin status."""
-    return current_user
+def get_profile(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+    """Returns the full user profile, including wallet data. FIXES 500 ERROR."""
+    # 🟢 CRITICAL FIX for 500 Error: Re-fetch the user using the active session.
+    # This forces complex relationships (like 'wallet') to be loaded correctly for Pydantic serialization.
+    user_with_wallet = db.query(models.User).filter(models.User.id == current_user.id).first()
+    
+    if not user_with_wallet:
+        raise HTTPException(status_code=404, detail="User not found in session")
+        
+    return user_with_wallet
 
 # 🟢 NEW ENDPOINT: User Stats (Fixes 404 for /api/user/stats)
 @app.get("/user/stats")
