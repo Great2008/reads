@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom classes for the app */
+@layer base {
+  body {
+    /* Use a default background and text color to support dark mode */
+    @apply antialiased bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200;
+  }
+}
+
+/* Define the custom fade-in animation used in modules */
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
