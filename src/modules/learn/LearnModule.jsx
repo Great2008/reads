@@ -5,23 +5,40 @@ import { api } from '../../services/api';
 // --- Sub-Components ---
 
 // Component 1: Lesson Detail View
+// NOTE: This component now defends against 'lesson.content' being null or undefined
 const LessonDetailView = ({ lesson, onNavigate }) => {
+    
+    // 🟢 FIX: Ensure lesson.content is a string before calling .replace()
+    const safeContent = (lesson.content || '').replace(/\n/g, '<br/>');
+
+    // Utility function to get the video ID for embedding
+    const getEmbedUrl = (url) => {
+        if (!url) return null;
+        if (url.includes('youtube.com/watch?v=')) {
+            // Extract v= parameter value
+            const match = url.match(/[?&]v=([^&]+)/);
+            return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+        }
+        return url.startsWith('http') ? url : `https://www.youtube.com/embed/${url}`; // Assume it's an ID if not a full URL
+    };
+
     return (
         <div className="space-y-6 animate-fade-in">
-            <button onClick={() => onNavigate('learn', 'list', lesson.category)} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4">
+            <button onClick={() => onNavigate('learn', 'list', lesson.category)} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 dark:text-indigo-400 dark:hover:text-indigo-300">
                 <ArrowLeft size={16} className="mr-1" /> Back to Lessons
             </button>
             <h2 className="text-3xl font-bold dark:text-white">{lesson.title}</h2>
             <div className="flex items-center gap-4 text-sm text-gray-500">
                 <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full font-semibold">{lesson.category}</span>
-                <span className="flex items-center"><Clock size={16} className="mr-1" /> Duration: 15 min</span>
+                <span className="flex items-center dark:text-gray-400"><Clock size={16} className="mr-1" /> Duration: 15 min</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700">
                 <h3 className="text-xl font-bold mb-4 dark:text-white">Content Overview</h3>
                 <div 
                     className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 space-y-4"
-                    dangerouslySetInnerHTML={{ __html: lesson.content.replace(/\n/g, '<br/>') }} // Simple newline to <br> conversion
+                    // 🟢 FIX APPLIED HERE: Use safeContent
+                    dangerouslySetInnerHTML={{ __html: safeContent }} 
                 />
             </div>
             
@@ -29,8 +46,8 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
                 <div className="mt-6">
                     <h3 className="text-xl font-bold mb-3 dark:text-white">Video Lecture</h3>
                     <iframe
-                        className="w-full aspect-video rounded-xl shadow-lg"
-                        src={lesson.video_url}
+                        className="w-full aspect-video rounded-xl shadow-lg border border-gray-200 dark:border-slate-700"
+                        src={getEmbedUrl(lesson.video_url)} // Use utility function to ensure valid embed URL
                         title="Video Lecture"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
@@ -39,7 +56,8 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
             )}
 
             <button
-                onClick={() => onNavigate('learn', 'quiz', lesson)}
+                // 🟢 FIX: Pass the lesson ID explicitly to the quiz view
+                onClick={() => onNavigate('learn', 'quiz', { lessonId: lesson.id, lessonTitle: lesson.title })} 
                 className="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 mt-6"
             >
                 <Award size={20} /> Start Quiz to Earn $READS
@@ -49,7 +67,10 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
 };
 
 // Component 2: Quiz View
-const QuizView = ({ lesson, onNavigate, onUpdateWallet }) => {
+const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { // 🟢 NOTE: Renamed 'lesson' prop to 'lessonData' for clarity
+    const lessonId = lessonData.lessonId;
+    const lessonTitle = lessonData.lessonTitle;
+    
     const [questions, setQuestions] = useState([]);
     const [step, setStep] = useState(0);
     const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -58,8 +79,9 @@ const QuizView = ({ lesson, onNavigate, onUpdateWallet }) => {
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        api.learn.getQuizQuestions(lesson.id).then(setQuestions);
-    }, [lesson.id]);
+        // Use the ID from the prop to fetch questions
+        api.learn.getQuizQuestions(lessonId).then(setQuestions);
+    }, [lessonId]);
 
     // Handle user selecting an option for the current question
     const handleAnswerSelect = (optionChar) => {
@@ -93,14 +115,17 @@ const QuizView = ({ lesson, onNavigate, onUpdateWallet }) => {
                     selected: selected
                 }));
 
-                const result = await api.learn.submitQuiz(lesson.id, submissionArray);
+                const result = await api.learn.submitQuiz(lessonId, submissionArray);
                 setQuizResult(result);
-                // Update the global wallet balance
+                // Update the global wallet balance (pass the new balance)
+                // The API result usually returns the tokens awarded, not the total balance.
+                // We trust the onUpdateWallet handler to manage the balance update (e.g., fetching new balance or adding to old)
                 onUpdateWallet(result.tokens_awarded); 
             } catch (e) {
                 console.error("Quiz submission failed:", e);
                 alert("Failed to submit quiz. Please try again.");
-                onNavigate('learn', 'detail', lesson); // Go back to lesson
+                // 🟢 Navigate back to lesson detail on failure
+                onNavigate('learn', 'detail', { id: lessonId }); 
             } finally {
                 setIsLoading(false);
             }
@@ -126,7 +151,7 @@ const QuizView = ({ lesson, onNavigate, onUpdateWallet }) => {
                 <div className="grid grid-cols-3 gap-4 text-left">
                     <div className="p-3 rounded-xl bg-indigo-50 dark:bg-slate-700">
                         <p className="text-sm text-gray-500">Score</p>
-                        <p className="text-2xl font-bold text-indigo-600">{score}%</p>
+                        <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{score}%</p>
                     </div>
                     <div className="p-3 rounded-xl bg-green-50 dark:bg-slate-700">
                         <p className="text-sm text-gray-500">Correct</p>
@@ -134,14 +159,14 @@ const QuizView = ({ lesson, onNavigate, onUpdateWallet }) => {
                     </div>
                     <div className="p-3 rounded-xl bg-yellow-50 dark:bg-slate-700">
                         <p className="text-sm text-gray-500">Tokens Earned</p>
-                        <p className="text-2xl font-bold text-yellow-600">{tokens_awarded} TKN</p>
+                        <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{tokens_awarded} TKN</p>
                     </div>
                 </div>
 
                 <button onClick={() => onNavigate('wallet')} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold mb-3 hover:bg-indigo-700 transition-colors">
                     Check Wallet
                 </button>
-                <button onClick={() => onNavigate('learn', 'categories')} className="text-gray-500 text-sm hover:underline">
+                <button onClick={() => onNavigate('learn', 'categories')} className="text-gray-500 text-sm hover:underline dark:text-gray-400">
                     Back to Courses
                 </button>
             </div>
@@ -155,7 +180,7 @@ const QuizView = ({ lesson, onNavigate, onUpdateWallet }) => {
     return (
         <div className="animate-fade-in">
             <button 
-                onClick={() => onNavigate('learn', 'detail', lesson)} 
+                onClick={() => onNavigate('learn', 'detail', { id: lessonId })} 
                 className="flex items-center text-gray-500 hover:text-gray-700 text-sm font-medium mb-6 dark:text-gray-400"
             >
                 <ArrowLeft size={16} className="mr-1" /> Back to Lesson
@@ -245,13 +270,13 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
                                 </div>
                                 <div className='text-left'>
                                     <h3 className="font-bold text-lg dark:text-white">{cat.name}</h3>
-                                    <p className="text-sm text-gray-500">{cat.count} lessons available</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">{cat.count} lessons available</p>
                                 </div>
                             </div>
                             <ChevronRight size={20} className="text-indigo-500 group-hover:translate-x-1 transition-transform" />
                         </button>
                     ))}
-                    {categories.length === 0 && <p className="text-center text-gray-500">No categories found.</p>}
+                    {categories.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400">No categories found.</p>}
                 </div>
             </div>
         );
@@ -262,7 +287,7 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
         const category = activeData?.name || 'Lessons';
         return (
             <div className="space-y-6 animate-fade-in">
-                <button onClick={() => onNavigate('learn', 'categories')} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4">
+                <button onClick={() => onNavigate('learn', 'categories')} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 dark:text-indigo-400 dark:hover:text-indigo-300">
                     <ArrowLeft size={16} className="mr-1" /> Back to Categories
                 </button>
                 <h2 className="text-3xl font-bold dark:text-white">{category} Lessons</h2>
@@ -270,6 +295,7 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
                     {lessons.map(lesson => (
                         <button 
                             key={lesson.id} 
+                            // 🟢 FIX: Pass the full lesson object for LessonDetailView to use
                             onClick={() => onNavigate('learn', 'detail', lesson)} 
                             className="w-full text-left bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm flex items-center justify-between group hover:shadow-md transition-all border border-gray-100 dark:border-slate-700"
                         >
@@ -277,7 +303,7 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
                                 <PlayCircle size={28} className="text-indigo-500 group-hover:text-indigo-600 transition-colors" />
                                 <div>
                                     <h3 className="font-bold dark:text-white">{lesson.title}</h3>
-                                    <p className="text-xs text-gray-500 flex items-center mt-1">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center mt-1">
                                         <Clock size={12} className="mr-1" /> {lesson.duration || 'N/A'}
                                     </p>
                                 </div>
@@ -285,7 +311,7 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
                             <ChevronRight size={20} className="text-gray-400 group-hover:text-indigo-500 transition-transform" />
                         </button>
                     ))}
-                    {lessons.length === 0 && <p className="text-center text-gray-500">No lessons found for this category.</p>}
+                    {lessons.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400">No lessons found for this category.</p>}
                 </div>
             </div>
         );
@@ -298,7 +324,8 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
 
     // 4. Quiz View
     if (subView === 'quiz') {
-        return <QuizView lesson={activeData} onNavigate={onNavigate} onUpdateWallet={onUpdateWallet} />;
+        // activeData is now an object: { lessonId: UUID, lessonTitle: string }
+        return <QuizView lessonData={activeData} onNavigate={onNavigate} onUpdateWallet={onUpdateWallet} />;
     }
 
     // Default Fallback
@@ -314,3 +341,7 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
         </div>
     );
 }
+
+//This updated file implements the crucial fix:
+const safeContent = (lesson.content || '').replace(/\n/g, '<br/>');
+
