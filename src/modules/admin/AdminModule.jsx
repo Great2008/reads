@@ -1,14 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Users, BookOpen, Plus, ShieldOff, Trash2, Video, List, CheckCircle, AlertCircle, Award, Settings, Zap, ArrowLeft, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    Users, Plus, ShieldOff, Trash2, Video, List, CheckCircle, AlertCircle, 
+    Award, Settings, Zap, ArrowLeft, XCircle, RefreshCw
+} from 'lucide-react';
 import { api } from '../../services/api';
 
-// Simple Alert/Toast component for feedback
+// ====================================================================
+// --- 0. Feedback Components ---
+// ====================================================================
+
+// Simple Toast component for non-intrusive feedback
 const Toast = ({ message, type, onClose }) => {
-    const color = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        info: 'bg-indigo-500',
-    }[type] || 'bg-gray-500';
+    const colorMap = {
+        success: 'bg-green-600',
+        error: 'bg-red-600',
+        info: 'bg-indigo-600',
+    };
+    const IconMap = {
+        success: CheckCircle,
+        error: AlertCircle,
+        info: List,
+    };
+    const Icon = IconMap[type] || List;
+    const color = colorMap[type] || 'bg-gray-600';
 
     if (!message) return null;
 
@@ -19,18 +33,30 @@ const Toast = ({ message, type, onClose }) => {
 
 
     return (
-        <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-xl text-white ${color} flex items-center gap-3 z-50`}>
-            {type === 'success' && <CheckCircle size={20} />}
-            {type === 'error' && <AlertCircle size={20} />}
-            {message}
-            <button onClick={onClose} className="ml-4 font-bold">X</button>
+        <div className={`fixed bottom-4 right-4 p-4 rounded-xl shadow-2xl text-white ${color} flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-0 opacity-100`}>
+            <Icon size={20} />
+            <span className="font-medium">{message}</span>
+            <button onClick={onClose} className="ml-4 font-bold p-1 rounded-full hover:bg-white/20 transition-colors">
+                <XCircle size={18} />
+            </button>
         </div>
     );
 };
 
+// --- Component 1: Permission Denied ---
+const PermissionDenied = () => (
+    <div className="text-center p-12 bg-red-50 dark:bg-red-950 rounded-2xl shadow-xl space-y-4 animate-fade-in">
+        <ShieldOff size={48} className="text-red-600 dark:text-red-400 mx-auto" />
+        <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">Access Denied</h2>
+        <p className="text-gray-600 dark:text-gray-400">
+            You do not have administrative privileges to view this panel.
+        </p>
+    </div>
+);
+
 
 // ====================================================================
-// --- 1. Quiz Creation / Management Form Component ---
+// --- 2. Quiz Creation / Management Form Component (NEW) ---
 // ====================================================================
 
 const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
@@ -65,7 +91,7 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
         }
     };
     
-    // 🟢 NEW FEATURE: Delete Quiz
+    // Feature: Delete Quiz
     const handleDeleteQuiz = async () => {
         if (!lessonId) return;
 
@@ -74,20 +100,21 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
         }
 
         setIsLoading(true);
+        onToast('Deleting Quiz...', 'info');
         try {
-            // 💥 REAL API CALL
+            // 💥 REAL API CALL (Assuming api.admin.deleteQuiz is available)
             await api.admin.deleteQuiz(lessonId);
             onToast(`Quiz for "${lessonTitle}" deleted successfully.`, 'success');
             onComplete(); 
         } catch (error) {
             console.error("Failed to delete quiz:", error);
-            onToast('Failed to delete quiz. Check network or server status.', 'error');
+            onToast('Failed to delete quiz. API error or not implemented.', 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
-    // 🟢 NEW FEATURE: Upload Quiz
+    // Feature: Upload Quiz
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
@@ -95,7 +122,7 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
 
         // Basic validation
         const isValid = questions.every(q => 
-            q.question && q.options.every(opt => opt) && ['A', 'B', 'C', 'D'].includes(q.correct_answer)
+            q.question && q.options.every(opt => opt.trim() !== '') && ['A', 'B', 'C', 'D'].includes(q.correct_answer)
         );
 
         if (!isValid) {
@@ -111,13 +138,13 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
                 correct_answer: q.correct_answer,
             }));
 
-            // 💥 REAL API CALL
+            // 💥 REAL API CALL (Assuming api.admin.uploadQuiz is available)
             await api.admin.uploadQuiz(lessonId, quizQuestions);
             onToast(`Quiz uploaded successfully for "${lessonTitle}"!`, 'success');
             onComplete(); // Navigate back to the list
         } catch (error) {
             console.error("Quiz upload failed:", error);
-            onToast('Failed to upload quiz. Internal server error.', 'error');
+            onToast('Failed to upload quiz. API error or not implemented.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -220,7 +247,7 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
 
 
 // ====================================================================
-// --- 2. Content Management List Component (Handles Lesson Delete) ---
+// --- 3. Content Management List Component (NEW) ---
 // ====================================================================
 
 const LessonQuizManager = ({ onSelectLesson, onToast }) => {
@@ -229,24 +256,20 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
     const [lessons, setLessons] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchCategories = () => {
-         api.learn.getCategories()
-            .then(data => {
-                setCategories(data);
-                if (data.length > 0 && !selectedCategory) {
-                    setSelectedCategory(data[0].name);
-                }
-            })
-            .catch(e => console.error("Failed to load categories:", e))
-    };
+    const fetchCategories = useCallback(async () => {
+        try {
+            const data = await api.learn.getCategories();
+            setCategories(data);
+            if (data.length > 0 && !selectedCategory) {
+                setSelectedCategory(data[0].name);
+            }
+        } catch (e) {
+            console.error("Failed to load categories:", e);
+            onToast('Failed to load categories.', 'error');
+        }
+    }, [onToast, selectedCategory]);
     
-    // 1. Fetch Categories on mount
-    useEffect(() => {
-        fetchCategories();
-    }, []);
-
-    // 2. Fetch Lessons based on selectedCategory
-    const fetchLessons = async (categoryName) => {
+    const fetchLessons = useCallback(async (categoryName) => {
         if (!categoryName) return;
         setIsLoading(true);
         try {
@@ -254,17 +277,24 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
             setLessons(data);
         } catch (e) {
             console.error("Failed to load lessons:", e);
+            onToast(`Failed to load lessons for ${categoryName}.`, 'error');
             setLessons([]);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [onToast]);
     
     useEffect(() => {
-        fetchLessons(selectedCategory);
-    }, [selectedCategory]);
+        fetchCategories();
+    }, [fetchCategories]);
+
+    useEffect(() => {
+        if (selectedCategory) {
+            fetchLessons(selectedCategory);
+        }
+    }, [selectedCategory, fetchLessons]);
     
-    // 🟢 NEW FEATURE: Lesson Delete Handler
+    // Feature: Lesson Delete Handler
     const handleDeleteLesson = async (lessonId, lessonTitle) => {
         if (!window.confirm(`Are you sure you want to permanently delete the lesson: "${lessonTitle}"? This will also delete the associated quiz.`)) {
             return;
@@ -273,16 +303,16 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
         setIsLoading(true);
         onToast('Deleting lesson...', 'info');
         try {
-            // 💥 REAL API CALL
+            // 💥 REAL API CALL (Assuming api.admin.deleteLesson is available)
             await api.admin.deleteLesson(lessonId);
             onToast(`Lesson "${lessonTitle}" deleted successfully.`, 'success');
             // Refresh the lesson list
             await fetchLessons(selectedCategory); 
             // Also refresh categories in case count changed
-            fetchCategories(); 
+            await fetchCategories(); 
         } catch (error) {
             console.error("Failed to delete lesson:", error);
-            onToast('Failed to delete lesson. Check API permissions or server status.', 'error');
+            onToast('Failed to delete lesson. API error or not implemented.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -301,7 +331,7 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
             <div className="flex flex-wrap gap-2 border-b pb-3 border-gray-200 dark:border-slate-700">
                 {categories.map(cat => (
                     <button
-                        key={cat.id}
+                        key={cat.name}
                         onClick={() => setSelectedCategory(cat.name)}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                             selectedCategory === cat.name
@@ -309,27 +339,39 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600'
                         }`}
                     >
-                        {cat.name} ({cat.count})
+                        {cat.name} ({cat.count || 0})
                     </button>
                 ))}
             </div>
 
             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700">
-                <h3 className="text-xl font-semibold mb-4 dark:text-white">Lessons in: {selectedCategory || '...'}</h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold dark:text-white">Lessons in: {selectedCategory || '...'}</h3>
+                    <button
+                         onClick={() => fetchLessons(selectedCategory)}
+                         disabled={isLoading}
+                         className="flex items-center gap-1 text-sm text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 disabled:opacity-50"
+                         title="Refresh Lessons"
+                    >
+                        <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+                        Refresh
+                    </button>
+                </div>
+
                 <div className="space-y-3">
                     {isLoading ? (
                          <div className="text-center text-gray-500 dark:text-gray-400">Loading lessons...</div>
                     ) : lessons.length === 0 ? (
-                        <p className="text-center text-gray-500 dark:text-gray-400">No lessons found in this category.</p>
+                        <p className="text-center text-gray-500 dark:text-gray-400">No lessons found in this category. Use the "Add Lesson" tab to create one.</p>
                     ) : (
                         lessons.map(lesson => (
                             <div
                                 key={lesson.id}
-                                className="flex items-center justify-between p-3 border border-gray-200 rounded-xl dark:border-slate-700 transition-shadow hover:shadow-md"
+                                className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-gray-200 rounded-xl dark:border-slate-700 transition-shadow hover:shadow-md"
                             >
-                                <div className='text-left'>
+                                <div className='text-left mb-2 sm:mb-0'>
                                     <p className="font-medium dark:text-white">{lesson.title}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">ID: {lesson.id}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">ID: {lesson.id.substring(0, 10)}...</p>
                                 </div>
                                 
                                 <div className="flex items-center gap-2">
@@ -362,19 +404,11 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
 };
 
 
-// --- Component 3: Permission Denied (unchanged) ---
-const PermissionDenied = () => (
-    <div className="text-center p-12 bg-red-50 dark:bg-red-950 rounded-2xl shadow-xl space-y-4 animate-fade-in">
-        <ShieldOff size={48} className="text-red-600 dark:text-red-400 mx-auto" />
-        <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">Access Denied</h2>
-        <p className="text-gray-600 dark:text-gray-400">
-            You do not have administrative privileges to view this panel.
-        </p>
-    </div>
-);
+// ====================================================================
+// --- 4. User Management (REAL API) (slightly adjusted to use Toast) ---
+// ====================================================================
 
-// --- Component 4: User Management (unchanged) ---
-const UserManagement = ({ currentAdminId }) => {
+const UserManagement = ({ currentAdminId, onToast }) => {
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -387,7 +421,7 @@ const UserManagement = ({ currentAdminId }) => {
             setUsers(data);
             setError(null);
         } catch (err) {
-            setError("Failed to fetch users.");
+            setError("Failed to fetch users. Check API implementation.");
             console.error(err);
         } finally {
             setIsLoading(false);
@@ -406,8 +440,9 @@ const UserManagement = ({ currentAdminId }) => {
             await api.admin.promoteUser(userToUpdate.id, isAdmin);
             // Update local state immediately
             setUsers(users.map(u => u.id === userToUpdate.id ? { ...u, is_admin: isAdmin } : u));
+            onToast(`${userToUpdate.name} ${isAdmin ? 'promoted to Admin' : 'demoted to Learner'}.`, 'success');
         } catch (error) {
-            alert(`Operation failed: ${error.message}`);
+            onToast(`Operation failed: ${error.message}`, 'error');
         }
     };
 
@@ -418,7 +453,12 @@ const UserManagement = ({ currentAdminId }) => {
         <div className="space-y-4 animate-fade-in">
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold dark:text-white">All System Users ({users.length})</h3>
-                <button onClick={fetchUsers} className="text-sm text-indigo-600 hover:underline">Refresh List</button>
+                <button 
+                    onClick={fetchUsers} 
+                    className="flex items-center gap-1 text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                    <RefreshCw size={14} /> Refresh List
+                </button>
             </div>
             
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden border border-gray-100 dark:border-slate-700">
@@ -448,9 +488,10 @@ const UserManagement = ({ currentAdminId }) => {
                                         disabled={user.id === currentAdminId} 
                                         className={`text-xs px-3 py-1 rounded border transition-colors ${
                                             user.is_admin 
-                                            ? 'border-red-200 text-red-600 hover:bg-red-50' 
-                                            : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50'
+                                            ? 'border-red-200 text-red-600 hover:bg-red-50 dark:text-red-300 dark:border-red-600 dark:hover:bg-red-900/20' 
+                                            : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:border-indigo-600 dark:hover:bg-indigo-900/20'
                                         } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                        title={user.id === currentAdminId ? "Cannot change your own role" : `Click to ${user.is_admin ? 'Demote' : 'Promote'}`}
                                     >
                                         {user.is_admin ? 'Demote' : 'Promote'}
                                     </button>
@@ -464,25 +505,29 @@ const UserManagement = ({ currentAdminId }) => {
     );
 };
 
-// --- Component 5: Lesson Creator (unchanged) ---
-const LessonCreator = () => {
+// ====================================================================
+// --- 5. Lesson Creator (REAL FORM) (slightly adjusted to use Toast) ---
+// ====================================================================
+const LessonCreator = ({ onToast }) => {
     const [formData, setFormData] = useState({
         category: 'General', title: '', content: '', video_url: '', order_index: 0
     });
-    const [status, setStatus] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [categories, setCategories] = useState(['General', 'JAMB', 'WAEC', 'Science', 'Mathematics']);
 
-    // Fetch existing categories to populate the dropdown
-    useEffect(() => {
+    const fetchCategories = useCallback(() => {
         api.learn.getCategories().then(cats => {
             if (cats && cats.length > 0) {
                 const catNames = cats.map(c => c.name);
                 // Merge default categories with those from DB, remove duplicates
                 setCategories([...new Set([...categories, ...catNames])]);
             }
-        });
-    }, []);
+        }).catch(e => console.error("Failed to fetch categories in creator:", e));
+    }, [categories]);
+
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
 
     const handleChange = (e) => {
         const { name, value, type } = e.target;
@@ -495,19 +540,16 @@ const LessonCreator = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        setStatus('Publishing...');
+        onToast('Publishing lesson...', 'info');
         
         try {
             // 💥 REAL API CALL
             await api.admin.createLesson(formData);
-            setStatus('success');
+            onToast('Lesson published successfully!', 'success');
             // Reset form but keep category
-            setFormData({ ...formData, title: '', content: '', video_url: '', order_index: formData.order_index + 1 });
-            
-            // Clear success message after 3s
-            setTimeout(() => setStatus(''), 3000);
+            setFormData(prev => ({ ...prev, title: '', content: '', video_url: '', order_index: prev.order_index + 1 }));
         } catch (error) {
-            setStatus(`Error: ${error.message}`);
+            onToast(`Error publishing lesson: ${error.message}`, 'error');
         } finally {
             setIsLoading(false);
         }
@@ -519,18 +561,6 @@ const LessonCreator = () => {
                 <Plus size={20} className="text-indigo-500"/> Create New Lesson
             </h3>
             
-            {status === 'success' && (
-                <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2">
-                    <CheckCircle size={18} /> Lesson published successfully!
-                </div>
-            )}
-            
-            {status.startsWith('Error') && (
-                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg flex items-center gap-2">
-                    <AlertCircle size={18} /> {status}
-                </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -544,22 +574,21 @@ const LessonCreator = () => {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-                        <div className="flex gap-2">
-                            <select 
-                                name="category" 
-                                value={formData.category} 
-                                onChange={handleChange}
-                                className="flex-1 p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
-                            >
-                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
+                        <select 
+                            name="category" 
+                            value={formData.category} 
+                            onChange={handleChange}
+                            className="w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                        >
+                            {[...new Set(categories)].map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
                          <input
                             type="text" 
                             placeholder="Or type new category..."
                             className="mt-2 w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white text-sm"
-                            onChange={(e) => e.target.value && setFormData({...formData, category: e.target.value})}
+                            onChange={(e) => setFormData(prev => ({...prev, category: e.target.value || 'General'}))}
                         />
+                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Select an existing category or type a new one.</p>
                     </div>
                 </div>
 
@@ -607,28 +636,30 @@ const LessonCreator = () => {
     );
 };
 
-// --- Component 6: Category List (View Only) (unchanged) ---
+// ====================================================================
+// --- 6. Category List (View Only) (unchanged, but refactored to function) ---
+// ====================================================================
 const CategoryList = () => {
     const [categories, setCategories] = useState([]);
     
     useEffect(() => {
-        api.learn.getCategories().then(setCategories);
+        api.learn.getCategories().then(setCategories).catch(e => console.error("Failed to load categories:", e));
     }, []);
 
     return (
         <div className="space-y-4 animate-fade-in">
              <h3 className="text-xl font-bold dark:text-white">Existing Categories</h3>
-             <p className="text-sm text-gray-500">
+             <p className="text-sm text-gray-500 dark:text-gray-400">
                 Categories are created automatically when you add a lesson with a new category name.
              </p>
              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {categories.map(cat => (
-                    <div key={cat.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl shadow border border-gray-100 dark:border-slate-700 text-center">
-                        <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center font-bold ${cat.color} mb-2`}>
+                    <div key={cat.id || cat.name} className="p-4 bg-white dark:bg-slate-800 rounded-xl shadow border border-gray-100 dark:border-slate-700 text-center">
+                        <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center font-bold bg-indigo-100 text-indigo-700 mb-2 dark:bg-indigo-900 dark:text-indigo-300`}>
                             {cat.name[0]}
                         </div>
                         <h4 className="font-bold dark:text-white">{cat.name}</h4>
-                        <span className="text-xs text-gray-500">{cat.count} Lessons</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{cat.count || 0} Lessons</span>
                     </div>
                 ))}
              </div>
@@ -637,11 +668,11 @@ const CategoryList = () => {
 }
 
 // ====================================================================
-// --- Main Admin Module (Updated for Navigation) ---
+// --- Main Admin Module ---
 // ====================================================================
 
 export default function AdminModule({ user }) {
-    const [activeTab, setActiveTab] = useState('manage'); // Start on content management
+    const [activeTab, setActiveTab] = useState('manage'); // Default to content management
     const [subView, setSubView] = useState('list'); // 'list' or 'quiz_form'
     const [activeLesson, setActiveLesson] = useState(null); // { id, title }
     const [toast, setToast] = useState({ message: '', type: 'info' });
@@ -674,7 +705,7 @@ export default function AdminModule({ user }) {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium border-b-2 ${
                 activeTab === name
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
             }`}
         >
             <Icon size={18} />
@@ -683,7 +714,7 @@ export default function AdminModule({ user }) {
     );
 
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 animate-fade-in">
+        <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 animate-fade-in bg-white dark:bg-slate-900 min-h-screen">
             <header className="mb-8">
                 <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">Admin Dashboard</h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">Manage all system content and user permissions.</p>
@@ -727,14 +758,15 @@ export default function AdminModule({ user }) {
                 )}
                 
                 {/* 2. Add Lesson Tab */}
-                {activeTab === 'lessons' && <LessonCreator />}
+                {activeTab === 'lessons' && <LessonCreator onToast={showToast} />}
                 
                 {/* 3. Categories Tab */}
                 {activeTab === 'categories' && <CategoryList />}
                 
                 {/* 4. User Management Tab */}
-                {activeTab === 'users' && <UserManagement currentAdminId={user.id} />}
+                {activeTab === 'users' && <UserManagement currentAdminId={user.id} onToast={showToast} />}
             </div>
+            {/* Global Toast Notification */}
             <Toast {...toast} onClose={() => setToast({ message: '', type: 'info' })} />
         </div>
     );
