@@ -154,18 +154,18 @@ export const api = {
             const data = await res.json();
             return data.token_balance;
         },
+        // 🚀 FIX: Corrected API route and removed incorrect data re-mapping
         getHistory: async () => {
-            const res = await fetch(`${API_URL}/rewards/history`, { headers: getAuthHeader() });
-            if (!res.ok) return [];
+            // 1. Correct route to match the backend change
+            const res = await fetch(`${API_URL}/wallet/history`, { headers: getAuthHeader() });
+            if (!res.ok) {
+                console.error("Failed to fetch wallet history.");
+                return [];
+            }
             
             const data = await res.json();
-            return data.map(item => ({
-                id: item.id,
-                title: `Completed: ${item.lesson.title}`,
-                amount: item.tokens_earned,
-                date: new Date(item.created_at).toLocaleDateString(),
-                type: 'Reward'
-            }));
+            // 2. Return data directly. WalletModule.jsx is now updated to expect lesson_title, tokens_earned, etc.
+            return data;
         }
     },
     
