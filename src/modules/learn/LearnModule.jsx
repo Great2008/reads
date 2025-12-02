@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle } from 'lucide-react';
+import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 
 // ====================================================================
@@ -7,12 +7,9 @@ import { api } from '../../services/api';
 // ====================================================================
 
 const LessonDetailView = ({ lesson, onNavigate }) => {
-    // Note: We assume 'lesson' here is the FULL detail object fetched by the DataLoader
     
-    // Defensive check to prevent crash if content is missing
     const safeContent = (lesson.content || 'Content not available.').replace(/\n/g, '<br/>');
 
-    // Utility function to get the video ID for embedding
     const getEmbedUrl = (url) => {
         if (!url) return null;
         if (url.includes('youtube.com/watch?v=')) {
@@ -55,7 +52,6 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
             )}
 
             <button
-                // Pass the necessary IDs/titles for the quiz start
                 onClick={() => onNavigate('learn', 'quiz', { lessonId: lesson.id, lessonTitle: lesson.title, category: lesson.category })} 
                 className="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 mt-6"
             >
@@ -70,26 +66,36 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
 // ====================================================================
 
 const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { 
-    const { lessonId, lessonTitle, category } = lessonData;
+    const { lessonId, lessonTitle } = lessonData;
     
-    // ... (rest of your existing QuizView state and logic) ...
     const [questions, setQuestions] = useState([]);
     const [step, setStep] = useState(0);
     const [selectedAnswer, setSelectedAnswer] = useState(null);
     const [answers, setAnswers] = useState({}); 
     const [quizResult, setQuizResult] = useState(null); 
     const [isLoading, setIsLoading] = useState(false);
+    // 🟢 NEW: State to track if quiz loading failed due to 500/404
+    const [loadError, setLoadError] = useState(null); 
 
     useEffect(() => {
-        // Ensure ID is present before fetching
+        setLoadError(null); // Reset error state on ID change
         if (lessonId) {
-            api.learn.getQuizQuestions(lessonId).then(setQuestions).catch(e => {
-                console.error("Failed to load quiz questions:", e);
-                // Handle navigation back on error
-                onNavigate('learn', 'detail', lessonId);
-            });
+            api.learn.getQuizQuestions(lessonId)
+                .then(data => {
+                    if (data && data.length > 0) {
+                        setQuestions(data);
+                    } else {
+                        // Handle case where API returns 200 but no questions
+                        setLoadError("No quiz questions found for this lesson.");
+                    }
+                })
+                .catch(e => {
+                    console.error("Failed to load quiz questions:", e);
+                    // 🟢 IMPROVED: Set specific error message for the user
+                    setLoadError("Failed to load quiz. The server may be unavailable (Error 500)."); 
+                });
         }
-    }, [lessonId, onNavigate]);
+    }, [lessonId]);
 
     const handleAnswerSelect = (optionChar) => {
         setSelectedAnswer(optionChar);
@@ -122,14 +128,27 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                 onUpdateWallet(result.tokens_awarded); 
             } catch (e) {
                 console.error("Quiz submission failed:", e);
-                // NOTE: Using a custom modal/message is preferred over alert()
-                alert("Failed to submit quiz. Please try again.");
-                onNavigate('learn', 'detail', lessonId); // Go back to lesson ID
-            } finally {
+                // Use a temporary state message instead of alert()
+                setLoadError("Submission failed. Please check your connection and try again.");
                 setIsLoading(false);
-            }
+            } 
         }
     };
+    
+    if (loadError) {
+        return (
+            <div className="text-center p-8 bg-red-50 border border-red-200 rounded-xl shadow-lg dark:bg-red-900/20 dark:border-red-800 animate-fade-in">
+                <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">Quiz Load Error</h2>
+                <p className="text-red-500 dark:text-red-300 mt-2">{loadError}</p>
+                <button 
+                    onClick={() => onNavigate('learn', 'detail', lessonId)} 
+                    className="mt-4 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150"
+                >
+                    Back to Lesson
+                </button>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return <div className="p-8 text-center dark:text-white">Submitting Quiz and Calculating Rewards...</div>;
@@ -139,7 +158,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
         return <div className="p-8 text-center dark:text-white">Loading quiz questions for "{lessonTitle}"...</div>;
     }
     
-    // Quiz Result View
+    // Quiz Result View (Remains unchanged)
     if (quizResult) {
         const { score, correct, wrong, tokens_awarded } = quizResult;
         return (
@@ -172,7 +191,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
         );
     }
 
-    // Current Question View
+    // Current Question View (Remains unchanged)
     const currentQuestion = questions[step];
     const optionChars = ['A', 'B', 'C', 'D'];
 
@@ -232,7 +251,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
 };
 
 // ====================================================================
-// --- 3. Lesson Data Loader (New Wrapper Component) ---
+// --- 3. Lesson Data Loader (Wrapper Component) ---
 // ====================================================================
 
 const LessonDataLoader = ({ lessonId, onNavigate }) => {
@@ -243,17 +262,15 @@ const LessonDataLoader = ({ lessonId, onNavigate }) => {
         setLoading(true);
         const fetchDetail = async () => {
             if (!lessonId) {
-                console.error("Loader received no lesson ID.");
                 setLoading(false);
                 return;
             }
             try {
-                // 🟢 CRITICAL: Fetch the full lesson detail here
                 const data = await api.learn.getLessonDetail(lessonId); 
                 setLessonData(data);
             } catch (error) {
                 console.error("Error fetching lesson detail:", error);
-                setLessonData(null); // Explicitly clear on error
+                setLessonData(null); 
             } finally {
                 setLoading(false);
             }
@@ -273,7 +290,7 @@ const LessonDataLoader = ({ lessonId, onNavigate }) => {
                 <p className="text-red-500 dark:text-red-300 mt-2">The lesson details could not be found or loaded.</p>
                 <button 
                     onClick={() => onNavigate('learn', 'categories')} 
-                    className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition duration-150"
+                    className="mt-4 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150"
                 >
                     Go Back to Categories
                 </button>
@@ -281,7 +298,6 @@ const LessonDataLoader = ({ lessonId, onNavigate }) => {
         );
     }
     
-    // Pass the fully loaded lesson data to the view component
     return <LessonDetailView lesson={lessonData} onNavigate={onNavigate} />;
 };
 
@@ -290,9 +306,11 @@ const LessonDataLoader = ({ lessonId, onNavigate }) => {
 // --- 4. Main Learn Module ---
 // ====================================================================
 
-export default function LearnModule({ subView, activeData, onNavigate, onUpdateWallet }) {
+// 🟢 NEW PROP: Added isAdmin to enable admin features
+export default function LearnModule({ subView, activeData, onNavigate, onUpdateWallet, isAdmin = false }) {
     const [categories, setCategories] = useState([]);
     const [lessons, setLessons] = useState([]);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Fetch Categories once on mount
     useEffect(() => {
@@ -302,16 +320,45 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
     }, [categories.length]);
 
     // Fetch Lessons when switching to the 'list' subView
+    const fetchLessons = (categoryName) => {
+        api.learn.getLessons(categoryName).then(setLessons).catch(e => {
+            console.error("Failed to load lessons:", e);
+            setLessons([]); // Clear lessons on failure
+        });
+    }
+
     useEffect(() => {
         if (subView === 'list' && activeData?.name) {
-            // Check if lessons already match the category, otherwise fetch
-            if (!lessons.length || lessons[0]?.category !== activeData.name) {
-                api.learn.getLessons(activeData.name).then(setLessons);
-            }
+            fetchLessons(activeData.name);
         }
-    }, [subView, activeData, lessons]);
+    }, [subView, activeData]);
 
-    // 1. Categories View
+    // 🟢 NEW: Admin Delete Handler
+    const handleDeleteLesson = async (lessonId, lessonTitle, categoryName) => {
+        if (!isAdmin) return;
+        
+        // Custom confirmation prompt instead of alert/confirm
+        if (!window.confirm(`Are you sure you want to permanently delete the lesson: "${lessonTitle}"?`)) {
+            return;
+        }
+
+        setIsDeleting(true);
+        try {
+            await api.admin.deleteLesson(lessonId);
+            // 1. Show success message (log is fine for now)
+            console.log(`Lesson ${lessonId} deleted successfully.`);
+            // 2. Refresh the lesson list
+            fetchLessons(categoryName);
+        } catch (error) {
+            console.error("Failed to delete lesson:", error);
+            alert("Failed to delete lesson. Check API permissions."); // Fallback message
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+
+    // 1. Categories View (Unchanged)
     if (subView === 'categories') {
         return (
             <div className="space-y-6 animate-fade-in">
@@ -342,24 +389,31 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
         );
     }
 
-    // 2. Lesson List View
+    // 2. Lesson List View (Updated for Admin Delete)
     if (subView === 'list') {
         const category = activeData?.name || 'Lessons';
+        
+        if (isDeleting) {
+            return <div className="p-8 text-center dark:text-white">Deleting lesson... Please wait.</div>;
+        }
+
         return (
             <div className="space-y-6 animate-fade-in">
                 <button onClick={() => onNavigate('learn', 'categories')} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 dark:text-indigo-400 dark:hover:text-indigo-300">
                     <ArrowLeft size={16} className="mr-1" /> Back to Categories
                 </button>
-                <h2 className="text-3xl font-bold dark:text-white">{category} Lessons</h2>
+                <h2 className="text-3xl font-bold dark:text-white">{category} Lessons {isAdmin && <span className="text-sm text-red-500">(Admin Mode)</span>}</h2>
                 <div className="space-y-3">
                     {lessons.map(lesson => (
-                        <button 
+                        <div 
                             key={lesson.id} 
-                            // 🟢 CRITICAL FIX: Only pass the ID, not the full summary object
-                            onClick={() => onNavigate('learn', 'detail', lesson.id)} 
-                            className="w-full text-left bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm flex items-center justify-between group hover:shadow-md transition-all border border-gray-100 dark:border-slate-700"
+                            className="w-full bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm flex items-center justify-between group transition-all border border-gray-100 dark:border-slate-700"
                         >
-                            <div className="flex items-center gap-4">
+                            <button
+                                // Content area button
+                                onClick={() => onNavigate('learn', 'detail', lesson.id)}
+                                className="flex items-center gap-4 flex-grow p-2 text-left"
+                            >
                                 <PlayCircle size={28} className="text-indigo-500 group-hover:text-indigo-600 transition-colors" />
                                 <div>
                                     <h3 className="font-bold dark:text-white">{lesson.title}</h3>
@@ -367,9 +421,23 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
                                         <Clock size={12} className="mr-1" /> {lesson.duration || 'N/A'}
                                     </p>
                                 </div>
+                            </button>
+
+                            <div className="flex items-center">
+                                {/* 🟢 Admin Delete Button */}
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => handleDeleteLesson(lesson.id, lesson.title, lesson.category)}
+                                        className="p-2 ml-2 text-red-500 hover:text-red-700 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                        title={`Delete ${lesson.title}`}
+                                        disabled={isDeleting}
+                                    >
+                                        <Trash2 size={20} />
+                                    </button>
+                                )}
+                                <ChevronRight size={20} className="text-gray-400 transition-transform ml-2" />
                             </div>
-                            <ChevronRight size={20} className="text-gray-400 group-hover:text-indigo-500 transition-transform" />
-                        </button>
+                        </div>
                     ))}
                     {lessons.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400">No lessons found for this category.</p>}
                 </div>
@@ -377,7 +445,7 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
         );
     }
 
-    // 3. Lesson Detail View (uses the new DataLoader)
+    // 3. Lesson Detail View
     if (subView === 'detail') {
         // activeData is now expected to be just the lesson ID string
         return <LessonDataLoader lessonId={activeData} onNavigate={onNavigate} />;
