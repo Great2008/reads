@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
     Users, Plus, ShieldOff, Trash2, Video, List, CheckCircle, AlertCircle, 
-    Award, Settings, Zap, ArrowLeft, XCircle, RefreshCw
+    Award, Settings, Zap, ArrowLeft, XCircle, RefreshCw, Shield // <-- Added Shield for promotion icon
 } from 'lucide-react';
 // Assuming 'api' is correctly imported and contains 'learn' and 'admin' endpoints
 import { api } from '../../services/api'; 
 
-// ====================================================================
-// --- 0. Feedback Components ---
-// ====================================================================
+// ====================================================================\
+// --- 0. Feedback Components ---\
+// ====================================================================\
 
 // Simple Toast component for non-intrusive feedback
 const Toast = ({ message, type, onClose }) => {
@@ -36,38 +36,117 @@ const Toast = ({ message, type, onClose }) => {
     return (
         <div className={`fixed bottom-4 right-4 p-4 rounded-xl shadow-2xl text-white ${color} flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-0 opacity-100`}>
             <Icon size={20} />
-            <span className="font-medium">{message}</span>
-            <button onClick={onClose} className="ml-4 font-bold p-1 rounded-full hover:bg-white/20 transition-colors">
-                <XCircle size={18} />
+            <span className="text-sm font-medium">{message}</span>
+            <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20">
+                <XCircle size={16} />
             </button>
         </div>
     );
 };
 
-// --- Component 1: Permission Denied ---
-const PermissionDenied = () => (
-    <div className="text-center p-12 bg-red-50 dark:bg-red-950 rounded-2xl shadow-xl space-y-4 animate-fade-in">
-        <ShieldOff size={48} className="text-red-600 dark:text-red-400 mx-auto" />
-        <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">Access Denied</h2>
-        <p className="text-gray-600 dark:text-gray-400">
-            You do not have administrative privileges to view this panel.
-        </p>
-    </div>
-);
+// ====================================================================\
+// --- 1. Lesson Creation Form ---\
+// ====================================================================\
 
+const LessonCreateForm = ({ onToast }) => {
+    const [formData, setFormData] = useState({
+        category: '',
+        title: '',
+        content: '',
+        video_url: '',
+        order_index: 0,
+    });
+    const [isLoading, setIsLoading] = useState(false);
 
-// ====================================================================
-// --- 2. Quiz Creation / Management Form Component ---
-// ====================================================================
-
-const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
-    // FIX: Changed correct_answer to correct_option to match expected backend schema (schemas.py)
-    const initialQuestion = {
-        question: '',
-        options: ['', '', '', ''],
-        correct_option: '', // 'A', 'B', 'C', or 'D'
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: name === 'order_index' ? parseInt(value) || 0 : value
+        }));
     };
 
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+
+        try {
+            await api.admin.createLesson(formData);
+            onToast({ message: 'Lesson created successfully!', type: 'success' });
+            // Reset form
+            setFormData({ category: '', title: '', content: '', video_url: '', order_index: 0 });
+        } catch (error) {
+            onToast({ message: 'Failed to create lesson.', type: 'error' });
+            console.error('Lesson creation failed:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700">
+            <h3 className="text-2xl font-bold dark:text-white border-b pb-3">Create New Lesson</h3>
+
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                <div className='col-span-1'>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                    <input type="text" name="category" value={formData.category} onChange={handleChange} required
+                        className="w-full mt-1 p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white"
+                        placeholder="e.g., JAMB Mathematics"
+                    />
+                </div>
+                <div className='col-span-1'>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Order Index</label>
+                    <input type="number" name="order_index" value={formData.order_index} onChange={handleChange} required
+                        className="w-full mt-1 p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white"
+                        placeholder="0"
+                    />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+                <input type="text" name="title" value={formData.title} onChange={handleChange} required
+                    className="w-full mt-1 p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white"
+                    placeholder="Lesson Title"
+                />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Video URL (Optional)</label>
+                <input type="url" name="video_url" value={formData.video_url} onChange={handleChange}
+                    className="w-full mt-1 p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Content (Markdown/HTML)</label>
+                <textarea name="content" value={formData.content} onChange={handleChange} required
+                    rows="10"
+                    className="w-full mt-1 p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white"
+                    placeholder="Enter the lesson content here..."
+                />
+            </div>
+
+            <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors disabled:bg-indigo-400 flex items-center justify-center"
+            >
+                {isLoading ? <RefreshCw size={20} className="animate-spin mr-2" /> : <Plus size={20} className="mr-2" />}
+                {isLoading ? 'Creating Lesson...' : 'Create Lesson'}
+            </button>
+        </form>
+    );
+};
+
+// ====================================================================\
+// --- 2. Quiz Creation Form ---\
+// ====================================================================\
+
+const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
+    const initialQuestion = { question: '', options: ['', '', '', ''], correct_option: 'A' };
     const [questions, setQuestions] = useState([initialQuestion]);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -90,668 +169,478 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
     const removeQuestion = (index) => {
         if (questions.length > 1) {
             setQuestions(questions.filter((_, i) => i !== index));
-        }
-    };
-    
-    // Feature: Delete Quiz (Assuming api.admin.deleteQuiz exists)
-    const handleDeleteQuiz = async () => {
-        if (!lessonId) return;
-
-        // Note: Using window.confirm is generally discouraged in iframes, but this is a critical administrative action.
-        if (!window.confirm(`Are you sure you want to permanently DELETE the existing quiz for "${lessonTitle}"? This action is irreversible.`)) {
-            return;
-        }
-
-        setIsLoading(true);
-        onToast('Deleting Quiz...', 'info');
-        try {
-            // 💥 REAL API CALL (Assuming api.admin.deleteQuiz is available)
-            await api.admin.deleteQuiz(lessonId); 
-            onToast(`Quiz for "${lessonTitle}" deleted successfully.`, 'success');
-            onComplete(); 
-        } catch (error) {
-            console.error("Failed to delete quiz:", error);
-            onToast('Failed to delete quiz. Check API implementation and permissions.', 'error');
-        } finally {
-            setIsLoading(false);
+        } else {
+            onToast({ message: "Quiz must have at least one question.", type: 'error' });
         }
     };
 
-    // Feature: Upload Quiz
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        onToast('Uploading Quiz...', 'info');
 
-        // Basic validation
-        const isValid = questions.every(q => 
-            // FIX: Validating q.correct_option
-            q.question && q.options.every(opt => opt.trim() !== '') && ['A', 'B', 'C', 'D'].includes(q.correct_option)
-        );
-
-        if (!isValid) {
-            setIsLoading(false);
-            onToast('Please complete all fields (question, 4 options, and correct answer) for every question.', 'error');
-            return;
-        }
+        const quizData = {
+            lesson_id: lessonId,
+            questions: questions.map((q, qIndex) => ({
+                ...q,
+                // Map the correct option letter back to the actual option text if needed
+                // Backend expects the letter ('A', 'B', etc.)
+                correct_option: ['A', 'B', 'C', 'D'][['A', 'B', 'C', 'D'].indexOf(q.correct_option)], 
+            })),
+        };
 
         try {
-            // FIX: Mapping to correct_option for the backend payload
-            const quizQuestions = questions.map((q) => ({
-                question: q.question,
-                options: q.options,
-                correct_option: q.correct_option,
-            }));
-
-            // 💥 REAL API CALL (Using corrected casing: uploadQuiz)
-            await api.admin.uploadQuiz(lessonId, quizQuestions);
-            onToast(`Quiz uploaded successfully for "${lessonTitle}"!`, 'success');
-            onComplete(); // Navigate back to the list
+            await api.admin.createQuiz(quizData);
+            onToast({ message: `Quiz for "${lessonTitle}" created successfully!`, type: 'success' });
+            onComplete(); // Go back to lesson list
         } catch (error) {
-            console.error("Quiz upload failed:", error);
-            onToast('Failed to upload quiz. Check API implementation and permissions.', 'error');
+            onToast({ message: 'Failed to create quiz.', type: 'error' });
+            console.error('Quiz creation failed:', error);
         } finally {
             setIsLoading(false);
         }
     };
-
-    const optionChars = ['A', 'B', 'C', 'D'];
+    
+    // Helper function to get the option letter
+    const getOptionLetter = (index) => String.fromCharCode(65 + index); // 65 is 'A'
 
     return (
-        <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Quiz for: {lessonTitle}</h3>
-            <p className="text-gray-600 dark:text-gray-400">Define the questions, options, and the single correct letter (A, B, C, or D). This will overwrite any existing quiz data.</p>
-            
-            <button
-                onClick={handleDeleteQuiz}
-                disabled={isLoading}
-                className="w-full py-2 px-4 border border-red-500 text-red-500 rounded-xl hover:bg-red-50 transition-colors dark:hover:bg-red-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-                <Trash2 size={18} /> Delete Existing Quiz
-            </button>
+        <form onSubmit={handleSubmit} className="space-y-6">
+            <h3 className="text-2xl font-bold dark:text-white">Create Quiz for: <span className='text-indigo-600'>{lessonTitle}</span></h3>
+            <p className='text-sm text-gray-600 dark:text-gray-400'>Lesson ID: {lessonId}</p>
 
-            <form onSubmit={handleSubmit} className="space-y-8">
-                {questions.map((q, qIndex) => (
-                    <div key={qIndex} className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700">
-                        <div className="flex justify-between items-start mb-4">
-                            <h4 className="text-xl font-semibold dark:text-white">Question {qIndex + 1}</h4>
-                            {questions.length > 1 && (
-                                <button
-                                    type="button"
-                                    onClick={() => removeQuestion(qIndex)}
-                                    className="text-red-500 hover:text-red-700 transition-colors"
-                                >
-                                    <XCircle size={20} />
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="space-y-3">
-                            <input
-                                type="text"
-                                placeholder="Enter question text here..."
-                                value={q.question}
-                                onChange={(e) => handleQuestionChange(qIndex, 'question', e.target.value)}
-                                className="w-full p-3 border border-gray-300 rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
-                                required
-                            />
-
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                {q.options.map((opt, oIndex) => (
-                                    <div key={oIndex} className="flex items-center gap-2">
-                                        <span className="font-bold w-4 text-gray-600 dark:text-gray-300">{optionChars[oIndex]}.</span>
-                                        <input
-                                            type="text"
-                                            placeholder={`Option ${optionChars[oIndex]}`}
-                                            value={opt}
-                                            onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
-                                            className="flex-grow p-2 border border-gray-300 rounded-lg text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"
-                                            required
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="mt-4 flex items-center gap-3 bg-indigo-50 dark:bg-slate-700 p-3 rounded-lg">
-                                <label className="font-medium text-gray-700 dark:text-gray-300">Correct Answer:</label>
-                                <select
-                                    // FIX: Binding to correct_option
-                                    value={q.correct_option}
-                                    // FIX: Updating correct_option
-                                    onChange={(e) => handleQuestionChange(qIndex, 'correct_option', e.target.value)}
-                                    className="p-2 border border-gray-300 rounded-lg dark:bg-slate-800 dark:border-slate-600 dark:text-white"
-                                    required
-                                >
-                                    <option value="" disabled>Select</option>
-                                    {optionChars.map(char => (
-                                        <option key={char} value={char}>{char}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
+            {questions.map((q, qIndex) => (
+                <div key={qIndex} className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 space-y-4">
+                    <div className='flex justify-between items-center'>
+                        <h4 className="text-xl font-semibold dark:text-white">Question {qIndex + 1}</h4>
+                        {questions.length > 1 && (
+                            <button
+                                type="button"
+                                onClick={() => removeQuestion(qIndex)}
+                                className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
+                            >
+                                <Trash2 size={20} />
+                            </button>
+                        )}
                     </div>
-                ))}
-                
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Question Text</label>
+                        <textarea value={q.question} onChange={(e) => handleQuestionChange(qIndex, 'question', e.target.value)} required
+                            rows="3"
+                            className="w-full mt-1 p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white"
+                            placeholder="Enter the question text"
+                        />
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">Options</label>
+                        {q.options.map((option, oIndex) => (
+                            <div key={oIndex} className="flex items-center gap-2">
+                                <span className='font-bold w-4 text-gray-700 dark:text-gray-300'>{getOptionLetter(oIndex)}.</span>
+                                <input type="text" value={option} onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)} required
+                                    className="flex-grow p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white"
+                                    placeholder={`Option ${getOptionLetter(oIndex)}`}
+                                />
+                                <input
+                                    type="radio"
+                                    name={`correct_option_${qIndex}`}
+                                    value={getOptionLetter(oIndex)}
+                                    checked={q.correct_option === getOptionLetter(oIndex)}
+                                    onChange={(e) => handleQuestionChange(qIndex, 'correct_option', e.target.value)}
+                                    className="w-5 h-5 text-green-600 border-gray-300 focus:ring-green-500"
+                                    title="Mark as correct answer"
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ))}
+
+            <div className='flex justify-between'>
                 <button
                     type="button"
                     onClick={addQuestion}
-                    className="w-full py-3 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors flex items-center justify-center gap-2 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600"
+                    className="flex items-center px-4 py-2 bg-indigo-100 text-indigo-600 font-semibold rounded-lg hover:bg-indigo-200 transition-colors"
                 >
-                    <Plus size={20} /> Add Another Question
+                    <Plus size={20} className="mr-2" />
+                    Add Question
                 </button>
-
                 <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-8"
+                    className="py-3 px-6 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors disabled:bg-green-400 flex items-center justify-center"
                 >
-                    {isLoading ? 'Uploading Quiz...' : <><Zap size={20} /> Upload/Update Quiz</>}
+                    {isLoading ? <RefreshCw size={20} className="animate-spin mr-2" /> : <CheckCircle size={20} className="mr-2" />}
+                    {isLoading ? 'Submitting Quiz...' : 'Finalize Quiz'}
                 </button>
-            </form>
-        </div>
+            </div>
+        </form>
     );
 };
 
 
-// ====================================================================
-// --- 3. Content Management List Component ---
-// ====================================================================
+// ====================================================================\
+// --- 3. Lesson/Quiz Manager (List) ---\
+// ====================================================================\
 
 const LessonQuizManager = ({ onSelectLesson, onToast }) => {
-    const [categories, setCategories] = useState([]);
-    const [selectedCategory, setSelectedCategory] = useState(null);
     const [lessons, setLessons] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchCategories = useCallback(async () => {
-        try {
-            // 💥 REAL API CALL
-            const data = await api.learn.getCategories();
-            setCategories(data);
-            if (data.length > 0 && !selectedCategory) {
-                setSelectedCategory(data[0].name);
-            }
-        } catch (e) {
-            console.error("Failed to load categories:", e);
-            onToast('Failed to load categories.', 'error');
-        }
-    }, [onToast, selectedCategory]);
-    
-    const fetchLessons = useCallback(async (categoryName) => {
-        if (!categoryName) return;
+    const fetchLessons = useCallback(async () => {
         setIsLoading(true);
         try {
-            // 💥 REAL API CALL
-            const data = await api.learn.getLessons(categoryName);
+            // This endpoint is assumed to return all lessons, possibly including a `has_quiz` flag
+            const data = await api.admin.getAllLessons(); 
             setLessons(data);
-        } catch (e) {
-            console.error("Failed to load lessons:", e);
-            onToast(`Failed to load lessons for ${categoryName}.`, 'error');
-            setLessons([]);
+        } catch (error) {
+            onToast({ message: 'Failed to fetch lessons.', type: 'error' });
+            console.error(error);
         } finally {
             setIsLoading(false);
         }
     }, [onToast]);
-    
-    useEffect(() => {
-        fetchCategories();
-    }, [fetchCategories]);
 
     useEffect(() => {
-        if (selectedCategory) {
-            fetchLessons(selectedCategory);
-        }
-    }, [selectedCategory, fetchLessons]);
-    
-    // Feature: Lesson Delete Handler
-    const handleDeleteLesson = async (lessonId, lessonTitle) => {
-        // Note: Using window.confirm is generally discouraged in iframes, but this is a critical administrative action.
-        if (!window.confirm(`Are you sure you want to permanently delete the lesson: "${lessonTitle}"? This will also delete the associated quiz.`)) {
-            return;
-        }
+        fetchLessons();
+    }, [fetchLessons]);
 
-        setIsLoading(true);
-        onToast('Deleting lesson...', 'info');
+    const handleDeleteLesson = async (lessonId) => {
+        if (!window.confirm('Are you sure you want to delete this lesson and its associated quizzes/progress?')) return;
+        
         try {
-            // 💥 REAL API CALL (Using corrected casing: deleteLesson)
             await api.admin.deleteLesson(lessonId);
-            onToast(`Lesson "${lessonTitle}" deleted successfully.`, 'success');
-            // Refresh the lesson list
-            await fetchLessons(selectedCategory); 
-            // Also refresh categories in case count changed
-            await fetchCategories(); 
+            onToast({ message: 'Lesson deleted successfully!', type: 'success' });
+            fetchLessons(); // Refresh list
         } catch (error) {
-            console.error("Failed to delete lesson:", error);
-            // This is likely the error the user was encountering
-            onToast('Failed to delete lesson. Please check API implementation of `api.admin.deleteLesson`.', 'error');
-        } finally {
-            setIsLoading(false);
+            onToast({ message: 'Failed to delete lesson. It might be in use.', type: 'error' });
+            console.error(error);
         }
     };
+    
+    // Sort lessons by category and then by order_index
+    const sortedLessons = [...lessons].sort((a, b) => {
+        if (a.category < b.category) return -1;
+        if (a.category > b.category) return 1;
+        return a.order_index - b.order_index;
+    });
 
-
-    if (isLoading && !selectedCategory) {
-        return <p className="p-8 text-center dark:text-white">Loading Categories and Lessons...</p>;
+    if (isLoading) {
+        return <div className="text-center p-8 dark:text-white">Loading Lessons... <RefreshCw size={20} className="animate-spin inline-block ml-2" /></div>;
     }
 
     return (
-        <div className="space-y-6 animate-fade-in">
-            <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2"><Settings size={24} className="text-indigo-500" /> Content Management</h2>
-            <p className="text-gray-600 dark:text-gray-400">Select a lesson below to delete it or manage its associated quiz questions.</p>
+        <div className="space-y-6">
+            <h3 className="text-2xl font-bold dark:text-white">Manage Quizzes</h3>
             
-            <div className="flex flex-wrap gap-2 border-b pb-3 border-gray-200 dark:border-slate-700">
-                {categories.map(cat => (
-                    <button
-                        key={cat.name}
-                        onClick={() => setSelectedCategory(cat.name)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                            selectedCategory === cat.name
-                                ? 'bg-indigo-600 text-white shadow-lg'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        {cat.name} ({cat.count || 0})
-                    </button>
-                ))}
-            </div>
-
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold dark:text-white">Lessons in: {selectedCategory || '...'}</h3>
-                    <button
-                         onClick={() => fetchLessons(selectedCategory)}
-                         disabled={isLoading}
-                         className="flex items-center gap-1 text-sm text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 disabled:opacity-50"
-                         title="Refresh Lessons"
-                    >
-                        <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-                        Refresh
-                    </button>
-                </div>
-
+            {sortedLessons.length === 0 ? (
+                <p className="text-center text-gray-500 dark:text-gray-400 p-8 bg-white dark:bg-slate-800 rounded-xl">No lessons available. Please add a lesson first.</p>
+            ) : (
                 <div className="space-y-3">
-                    {isLoading ? (
-                         <div className="text-center text-gray-500 dark:text-gray-400">Loading lessons...</div>
-                    ) : lessons.length === 0 ? (
-                        <p className="text-center text-gray-500 dark:text-gray-400">No lessons found in this category. Use the "Add Lesson" tab to create one.</p>
-                    ) : (
-                        lessons.map(lesson => (
-                            <div
-                                key={lesson.id}
-                                className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-gray-200 rounded-xl dark:border-slate-700 transition-shadow hover:shadow-md"
-                            >
-                                <div className='text-left mb-2 sm:mb-0'>
-                                    <p className="font-medium dark:text-white">{lesson.title}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">ID: {lesson.id.substring(0, 10)}...</p>
-                                </div>
-                                
-                                <div className="flex items-center gap-2">
-                                    {/* Quiz Management Button */}
-                                    <button
-                                        onClick={() => onSelectLesson(lesson.id, lesson.title, 'quiz_form')}
-                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-full dark:hover:bg-blue-900/50 transition-colors"
-                                        title="Manage Quiz Questions"
-                                        disabled={isLoading}
-                                    >
-                                        <Award size={20} />
-                                    </button>
-                                    {/* Lesson Delete Button */}
-                                    <button
-                                        onClick={() => handleDeleteLesson(lesson.id, lesson.title)}
-                                        className="p-2 text-red-500 hover:bg-red-50 rounded-full dark:hover:bg-red-900/50 transition-colors"
-                                        title={`Delete ${lesson.title}`}
-                                        disabled={isLoading}
-                                    >
-                                        <Trash2 size={20} />
-                                    </button>
-                                </div>
+                    {sortedLessons.map((lesson) => (
+                        <div key={lesson.id} className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-shadow">
+                            <div className='flex flex-col'>
+                                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">{lesson.category}</p>
+                                <p className="font-semibold dark:text-white">{lesson.title}</p>
                             </div>
-                        ))
-                    )}
+                            <div className='flex items-center space-x-3'>
+                                {/* Quiz Status Indicator */}
+                                {lesson.has_quiz ? (
+                                    <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs font-medium px-3 py-1 rounded-full dark:bg-green-900 dark:text-green-300">
+                                        <CheckCircle size={14} /> Quiz Ready
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 text-xs font-medium px-3 py-1 rounded-full dark:bg-yellow-900 dark:text-yellow-300">
+                                        <AlertCircle size={14} /> No Quiz
+                                    </span>
+                                )}
+
+                                {/* Create Quiz Button */}
+                                <button
+                                    onClick={() => onSelectLesson(lesson)}
+                                    title="Create or Manage Quiz"
+                                    className="p-2 bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200 transition-colors"
+                                >
+                                    <Zap size={20} />
+                                </button>
+                                
+                                {/* Delete Lesson Button */}
+                                <button
+                                    onClick={() => handleDeleteLesson(lesson.id)}
+                                    title="Delete Lesson"
+                                    className="p-2 text-red-500 rounded-full hover:bg-red-100 transition-colors"
+                                >
+                                    <Trash2 size={20} />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            </div>
+            )}
         </div>
     );
 };
 
 
-// ====================================================================
-// --- 4. User Management (REAL API) ---
-// ====================================================================
+// ====================================================================\
+// --- 4. User Management Component ---\
+// ====================================================================\
 
 const UserManagement = ({ currentAdminId, onToast }) => {
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [actionLoading, setActionLoading] = useState({}); // To track loading state per user
 
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         setIsLoading(true);
         try {
-            // 💥 REAL API CALL
-            const data = await api.admin.getUsers();
-            setUsers(data);
-            setError(null);
-        } catch (err) {
-            setError("Failed to fetch users. Check API implementation.");
-            console.error(err);
+            const data = await api.admin.getAllUsers();
+            // Sort by creation date descending to show newest first, then admin status
+            const sortedData = data.sort((a, b) => {
+                if (a.is_admin === b.is_admin) {
+                    return new Date(b.created_at) - new Date(a.created_at);
+                }
+                return a.is_admin ? -1 : 1;
+            });
+            setUsers(sortedData);
+        } catch (error) {
+            onToast({ message: 'Failed to fetch user list.', type: 'error' });
+            console.error(error);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [onToast]);
 
     useEffect(() => {
         fetchUsers();
-    }, []);
-
-    const handlePromotion = async (userToUpdate, isAdmin) => {
-        // Note: Using window.confirm is generally discouraged in iframes, but this is a critical administrative action.
-        if (!window.confirm(`Are you sure you want to ${isAdmin ? 'PROMOTE' : 'DEMOTE'} ${userToUpdate.name}?`)) return;
-
-        try {
-            // 💥 REAL API CALL
-            await api.admin.promoteUser(userToUpdate.id, isAdmin);
-            // Update local state immediately
-            setUsers(users.map(u => u.id === userToUpdate.id ? { ...u, is_admin: isAdmin } : u));
-            onToast(`${userToUpdate.name} ${isAdmin ? 'promoted to Admin' : 'demoted to Learner'}.`, 'success');
-        } catch (error) {
-            onToast(`Operation failed: ${error.message}`, 'error');
-        }
-    };
-
-    if (isLoading) return <p className="text-center dark:text-white p-8">Loading users from database...</p>;
-    if (error) return <p className="text-center text-red-500 p-8">{error}</p>;
-
-    return (
-        <div className="space-y-4 animate-fade-in">
-            <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold dark:text-white">All System Users ({users.length})</h3>
-                <button 
-                    onClick={fetchUsers} 
-                    className="flex items-center gap-1 text-sm text-indigo-600 hover:underline dark:text-indigo-400"
-                >
-                    <RefreshCw size={14} /> Refresh List
-                </button>
-            </div>
-            
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden border border-gray-100 dark:border-slate-700">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
-                    <thead className="bg-gray-50 dark:bg-slate-700">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">User</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Role</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                        {users.map(user => (
-                            <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${user.is_admin ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'}`}>
-                                        {user.is_admin ? 'Admin' : 'Learner'}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button 
-                                        onClick={() => handlePromotion(user, !user.is_admin)}
-                                        disabled={user.id === currentAdminId} 
-                                        className={`text-xs px-3 py-1 rounded border transition-colors ${
-                                            user.is_admin 
-                                            ? 'border-red-200 text-red-600 hover:bg-red-50 dark:text-red-300 dark:border-red-600 dark:hover:bg-red-900/20' 
-                                            : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:border-indigo-600 dark:hover:bg-indigo-900/20'
-                                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                        title={user.id === currentAdminId ? "Cannot change your own role" : `Click to ${user.is_admin ? 'Demote' : 'Promote'}`}
-                                    >
-                                        {user.is_admin ? 'Demote' : 'Promote'}
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
-
-// ====================================================================
-// --- 5. Lesson Creator (REAL FORM) ---
-// ====================================================================
-const LessonCreator = ({ onToast }) => {
-    const [formData, setFormData] = useState({
-        category: 'General', title: '', content: '', video_url: '', order_index: 0
-    });
-    const [isLoading, setIsLoading] = useState(false);
-    // Use a small set of initial categories as a fallback
-    const [categories, setCategories] = useState(['General', 'JAMB', 'WAEC', 'Science', 'Mathematics']);
-
-    const fetchCategories = useCallback(() => {
-        // 💥 REAL API CALL
-        api.learn.getCategories().then(cats => {
-            if (cats && cats.length > 0) {
-                const catNames = cats.map(c => c.name);
-                // Merge default categories with those from DB, remove duplicates
-                setCategories(prev => [...new Set([...prev, ...catNames])]);
-            }
-        }).catch(e => console.error("Failed to fetch categories in creator:", e));
-    }, []);
-
-    useEffect(() => {
-        fetchCategories();
-    }, [fetchCategories]);
-
-    const handleChange = (e) => {
-        const { name, value, type } = e.target;
-        setFormData({ 
-            ...formData, 
-            [name]: type === 'number' ? parseInt(value, 10) : value 
-        });
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsLoading(true);
-        onToast('Publishing lesson...', 'info');
-        
-        try {
-            // 💥 REAL API CALL
-            await api.admin.createLesson(formData);
-            onToast('Lesson published successfully!', 'success');
-            // Reset form but keep category
-            setFormData(prev => ({ ...prev, title: '', content: '', video_url: '', order_index: prev.order_index + 1 }));
-            // Refresh categories list just in case a new one was created
-            fetchCategories(); 
-        } catch (error) {
-            onToast(`Error publishing lesson: ${error.message}`, 'error');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow border border-gray-100 dark:border-slate-700 animate-fade-in">
-            <h3 className="text-lg font-bold dark:text-white mb-4 flex items-center gap-2">
-                <Plus size={20} className="text-indigo-500"/> Create New Lesson
-            </h3>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
-                        <input
-                            type="text" name="title" required
-                            value={formData.title} onChange={handleChange}
-                            className="w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
-                            placeholder="e.g. Introduction to Calculus"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-                        <select 
-                            name="category" 
-                            value={formData.category} 
-                            onChange={handleChange}
-                            className="w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
-                        >
-                            {[...new Set(categories)].map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                         <input
-                            type="text" 
-                            placeholder="Or type new category..."
-                            className="mt-2 w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white text-sm"
-                            // Note: This input overrides the select value if text is entered
-                            onChange={(e) => setFormData(prev => ({...prev, category: e.target.value || 'General'}))}
-                        />
-                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Select an existing category or type a new one.</p>
-                    </div>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Content (Markdown Supported)</label>
-                    <textarea 
-                        name="content" required
-                        value={formData.content} onChange={handleChange}
-                        className="w-full p-2 h-32 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white font-mono text-sm"
-                        placeholder="# Lesson Header\n\nContent goes here..."
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Video URL (Optional)</label>
-                    <div className="relative">
-                        <Video size={18} className="absolute left-3 top-2.5 text-gray-400" />
-                        <input
-                            type="text" name="video_url"
-                            value={formData.video_url} onChange={handleChange}
-                            className="w-full pl-10 p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
-                            placeholder="https://youtube.com/..."
-                        />
-                    </div>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort Order</label>
-                    <input
-                        type="number" name="order_index"
-                        value={formData.order_index} onChange={handleChange}
-                        className="w-24 p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
-                    />
-                </div>
-
-                <button 
-                    type="submit" 
-                    disabled={isLoading}
-                    className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                >
-                    {isLoading ? 'Publishing...' : 'Publish Lesson'}
-                </button>
-            </form>
-        </div>
-    );
-};
-
-// ====================================================================
-// --- 6. Category List (View Only) ---
-// ====================================================================
-const CategoryList = () => {
-    const [categories, setCategories] = useState([]);
+    }, [fetchUsers]);
     
-    useEffect(() => {
-        // 💥 REAL API CALL
-        api.learn.getCategories().then(setCategories).catch(e => console.error("Failed to load categories:", e));
-    }, []);
+    // NEW: Handle Admin Status Change
+    const handleToggleAdminStatus = useCallback(async (userId, currentStatus) => {
+        // Prevent admin from modifying their own status
+        if (userId === currentAdminId) {
+            onToast({ message: "You cannot change your own admin status.", type: 'error' });
+            return;
+        }
+
+        setActionLoading(prev => ({ ...prev, [userId]: true }));
+        try {
+            // Determine action: if currentStatus is true, we demote; if false, we promote
+            const action = currentStatus ? 'demoteUser' : 'promoteUser';
+            await api.admin[action](userId);
+            
+            onToast({ 
+                message: `User successfully ${currentStatus ? 'demoted' : 'promoted'}!`, 
+                type: 'success' 
+            });
+            fetchUsers(); // Refresh the user list
+        } catch (error) {
+            onToast({ message: `Failed to ${currentStatus ? 'demote' : 'promote'} user.`, type: 'error' });
+            console.error(error);
+        } finally {
+            setActionLoading(prev => ({ ...prev, [userId]: false }));
+        }
+    }, [currentAdminId, onToast, fetchUsers]);
+
+
+    // Placeholder for other actions (Ban/Delete)
+    const handleBanUser = (userId) => {
+        onToast({ message: `Ban functionality for ${userId} is not yet implemented.`, type: 'info' });
+        // Logic would go here: api.admin.banUser(userId)
+    };
+
+    const handleDeleteUser = (userId) => {
+        if (!window.confirm(`Are you sure you want to permanently delete user ${userId}?`)) return;
+        onToast({ message: `Delete functionality for ${userId} is not yet implemented.`, type: 'info' });
+        // Logic would go here: api.admin.deleteUser(userId)
+    };
+
+
+    const filteredUsers = users.filter(user => 
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (isLoading) {
+        return <div className="text-center p-8 dark:text-white">Loading Users... <RefreshCw size={20} className="animate-spin inline-block ml-2" /></div>;
+    }
 
     return (
-        <div className="space-y-4 animate-fade-in">
-             <h3 className="text-xl font-bold dark:text-white">Existing Categories</h3>
-             <p className="text-sm text-gray-500 dark:text-gray-400">
-                Categories are created automatically when you add a lesson with a new category name.
-             </p>
-             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {categories.map(cat => (
-                    <div key={cat.id || cat.name} className="p-4 bg-white dark:bg-slate-800 rounded-xl shadow border border-gray-100 dark:border-slate-700 text-center">
-                        <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center font-bold bg-indigo-100 text-indigo-700 mb-2 dark:bg-indigo-900 dark:text-indigo-300`}>
-                            {cat.name[0]}
+        <div className="space-y-6">
+            <h3 className="text-2xl font-bold dark:text-white">User Management</h3>
+
+            <input 
+                type="text" 
+                placeholder="Search by name, email, or ID..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full p-3 border border-gray-300 dark:border-slate-700 rounded-lg dark:bg-slate-700 dark:text-white shadow-sm"
+            />
+
+            <div className='hidden md:grid grid-cols-5 gap-4 p-4 font-bold text-sm text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-slate-700'>
+                <p>Name</p>
+                <p>Email</p>
+                <p>Admin</p>
+                <p>Member Since</p>
+                <p className="text-right">Actions</p>
+            </div>
+
+            <div className="space-y-3">
+                {filteredUsers.map((user) => (
+                    <div key={user.id} className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm items-center hover:shadow-md transition-shadow">
+                        {/* Name Column (Col 1/2 on mobile) */}
+                        <div className="md:col-span-1 col-span-2">
+                            <p className="font-semibold dark:text-white">{user.name}</p>
+                            <p className='text-xs text-gray-500 md:hidden'>{user.email}</p>
                         </div>
-                        <h4 className="font-bold dark:text-white">{cat.name}</h4>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{cat.count || 0} Lessons</span>
+                        
+                        {/* Email Column (Col 2/5 on desktop, hidden on mobile) */}
+                        <p className="text-sm text-gray-600 dark:text-gray-400 hidden md:block">{user.email}</p>
+                        
+                        {/* Admin Status (Col 3/5) */}
+                        <p className="text-sm md:col-span-1 col-span-1">
+                            {user.is_admin ? (
+                                <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs font-medium px-3 py-1 rounded-full dark:bg-green-900 dark:text-green-300">
+                                    Admin
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-xs font-medium px-3 py-1 rounded-full dark:bg-gray-700 dark:text-gray-300">
+                                    User
+                                </span>
+                            )}
+                        </p>
+
+                        {/* Member Since (Col 4/5) */}
+                        <p className="text-sm text-gray-500 dark:text-gray-400 hidden md:block">
+                            {new Date(user.created_at).toLocaleDateString()}
+                        </p>
+                        
+                        {/* Actions (Col 5/5) */}
+                        <div className="md:col-span-1 col-span-2 flex justify-end space-x-2">
+                            
+                            {/* NEW: Promote/Demote Button */}
+                            {user.id !== currentAdminId && (
+                                <button
+                                    onClick={() => handleToggleAdminStatus(user.id, user.is_admin)}
+                                    disabled={actionLoading[user.id]}
+                                    title={user.is_admin ? "Demote from Admin" : "Promote to Admin"}
+                                    className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                        user.is_admin 
+                                            ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900'
+                                            : 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-400 dark:hover:bg-green-900'
+                                    }`}
+                                >
+                                    {actionLoading[user.id] ? (
+                                        <RefreshCw size={20} className="animate-spin" />
+                                    ) : user.is_admin ? (
+                                        <ShieldOff size={20} />
+                                    ) : (
+                                        <Shield size={20} />
+                                    )}
+                                </button>
+                            )}
+                            
+                            {/* Ban/Unban Button Placeholder */}
+                            {/* <button
+                                onClick={() => handleBanUser(user.id)}
+                                title="Ban User"
+                                className="p-2 text-yellow-500 rounded-full hover:bg-yellow-100 transition-colors"
+                                disabled={user.id === currentAdminId}
+                            >
+                                <ShieldOff size={20} />
+                            </button> */}
+                            
+                            {/* Delete Button Placeholder */}
+                            <button
+                                onClick={() => handleDeleteUser(user.id)}
+                                title="Delete User"
+                                className="p-2 text-red-500 rounded-full hover:bg-red-100 transition-colors"
+                                disabled={user.id === currentAdminId}
+                            >
+                                <Trash2 size={20} />
+                            </button>
+                        </div>
                     </div>
                 ))}
-             </div>
+                {filteredUsers.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400 p-8">No users match your search criteria.</p>}
+            </div>
         </div>
     );
-}
+};
 
-// ====================================================================
-// --- Main Admin Module ---
-// ====================================================================
+
+// ====================================================================\
+// --- 5. Main Admin Module Export ---\
+// ====================================================================\
 
 export default function AdminModule({ user }) {
-    const [activeTab, setActiveTab] = useState('manage'); // Default to content management
-    const [subView, setSubView] = useState('list'); // 'list' or 'quiz_form'
-    const [activeLesson, setActiveLesson] = useState(null); // { id, title }
+    const [activeTab, setActiveTab] = useState('users'); // Default to users tab
+    const [activeLesson, setActiveLesson] = useState(null); // For Quiz Creation state
     const [toast, setToast] = useState({ message: '', type: 'info' });
 
-    // Security Check
-    if (!user || !user.is_admin) {
-        return <PermissionDenied />;
-    }
-    
-    // Helper to show toasts
-    const showToast = (message, type) => setToast({ message, type });
+    const showToast = useCallback((t) => {
+        setToast(t);
+    }, []);
 
-    const handleSelectLesson = (id, title, targetSubView) => {
-        setActiveLesson({ id, title });
-        setSubView(targetSubView);
+    const handleSelectLesson = (lesson) => {
+        setActiveLesson(lesson);
     };
-
+    
     const handleBackToList = () => {
         setActiveLesson(null);
-        setSubView('list');
     };
-
-    const TabButton = ({ name, icon: Icon, label }) => (
-        <button
-            onClick={() => {
-                setActiveTab(name);
-                // Reset sub-view state when changing main tabs
-                setSubView('list'); 
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium border-b-2 ${
-                activeTab === name
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}
-        >
-            <Icon size={18} />
-            {label}
-        </button>
-    );
+    
+    const tabs = [
+        { id: 'users', label: 'User Management', Icon: Users },
+        { id: 'lessons', label: 'Add Lesson', Icon: Plus },
+        { id: 'quizzes', label: 'Manage Quizzes', Icon: Zap },
+        // { id: 'categories', label: 'Categories', Icon: List }, // Removing unused tab
+    ];
+    
+    // Check if the current user is an admin before rendering
+    if (!user || !user.is_admin) {
+        return (
+            <div className="p-8 text-center text-red-500 dark:text-red-400 space-y-4">
+                <ShieldOff size={48} className="mx-auto" />
+                <h2 className="text-2xl font-bold">Access Denied</h2>
+                <p>You must be an administrator to access this module.</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 animate-fade-in bg-white dark:bg-slate-900 min-h-screen">
-            <header className="mb-8">
-                <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">Admin Dashboard</h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">Manage all system content and user permissions.</p>
-            </header>
+        <div className="space-y-8 animate-fade-in">
+            <h1 className="text-4xl font-extrabold dark:text-white border-b pb-4">Admin Dashboard</h1>
 
             {/* Tab Navigation */}
-            <div className="flex gap-2 border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
-                <TabButton name="manage" icon={Settings} label="Manage Content" />
-                <TabButton name="lessons" icon={Plus} label="Add Lesson" />
-                <TabButton name="categories" icon={List} label="Categories" />
-                <TabButton name="users" icon={Users} label="Manage Users" />
+            <div className="flex border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
+                {tabs.map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => {
+                            setActiveTab(tab.id);
+                            setActiveLesson(null); // Reset lesson context when switching tabs
+                        }}
+                        className={`flex items-center px-4 py-2 -mb-px text-sm font-medium border-b-2 transition-colors duration-200 ${
+                            activeTab === tab.id
+                                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                                : 'border-transparent text-gray-500 hover:text-indigo-600 hover:border-gray-300 dark:text-gray-400 dark:hover:text-indigo-400'
+                        }`}
+                    >
+                        <tab.Icon size={20} className="mr-2" />
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
-            {/* Content Area */}
-            <div className="pt-4">
-                {/* 1. Content Management Tab: Handles Lesson Delete & Quiz Upload/Delete */}
-                {activeTab === 'manage' && (
+            {/* Tab Content */}
+            <div className='p-2 md:p-4'>
+                {/* 1. Manage Quizzes Tab (Lesson List or Quiz Form) */}
+                {activeTab === 'quizzes' && (
                     <div className="space-y-6">
-                        {subView === 'quiz_form' && activeLesson ? (
+                        {activeLesson ? (
                             <>
                                 <button
                                     onClick={handleBackToList}
@@ -776,17 +665,24 @@ export default function AdminModule({ user }) {
                 )}
                 
                 {/* 2. Add Lesson Tab */}
-                {activeTab === 'lessons' && <LessonCreator onToast={showToast} />}
+                {activeTab === 'lessons' && <LessonCreateForm onToast={showToast} />}
                 
-                {/* 3. Categories Tab */}
-                {activeTab === 'categories' && <CategoryList />}
-                
-                {/* 4. User Management Tab */}
+                {/* 3. User Management Tab */}
                 {activeTab === 'users' && <UserManagement currentAdminId={user.id} onToast={showToast} />}
+                
+                {/* 4. Categories Tab (Not implemented, hidden) */}
+                {/* {activeTab === 'categories' && <CategoryList />} */}
             </div>
+            
             {/* Global Toast Notification */}
             <Toast {...toast} onClose={() => setToast({ message: '', type: 'info' })} />
         </div>
     );
 }
+
+// NOTE on API calls:
+// The UserManagement component now assumes the existence of:
+// - api.admin.getAllUsers() -> returns List of User objects (including is_admin)
+// - api.admin.promoteUser(userId) -> calls PATCH /api/admin/users/{user_id}/promote
+// - api.admin.demoteUser(userId) -> calls PATCH /api/admin/users/{user_id}/demote
 
