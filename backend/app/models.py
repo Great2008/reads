@@ -31,30 +31,36 @@ class Lesson(Base):
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     video_url = Column(String, nullable=True)
-    order_index = Column(Integer, nullable=False)
+    order_index = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    questions = relationship("QuizQuestion", back_populates="lesson", cascade="all, delete-orphan")
-    progress = relationship("LessonProgress", back_populates="lesson")
+    questions = relationship("QuizQuestion", back_populates="lesson")
 
+
+# 🟢 FIX: Added LessonProgress model with the missing 'completed' column
 class LessonProgress(Base):
     __tablename__ = "lesson_progress"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     lesson_id = Column(UUID(as_uuid=True), ForeignKey("lessons.id"), nullable=False)
-    completed_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # CRITICAL FIX: The missing column that caused the FATAL error
+    completed = Column(Boolean, default=False, nullable=False) 
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     user = relationship("User", back_populates="progress")
-    lesson = relationship("Lesson", back_populates="progress")
 
 class QuizQuestion(Base):
     __tablename__ = "quiz_questions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     lesson_id = Column(UUID(as_uuid=True), ForeignKey("lessons.id"), nullable=False)
-    question = Column(String, nullable=False)
-    options = Column(JSON, nullable=False)  # ["A: Option A", "B: Option B"]
+    question = Column(Text, nullable=False)
+    options = Column(JSON, nullable=False) # Stores list of strings as JSON/JSONB
     correct_option = Column(String, nullable=False)  # "A"
 
     lesson = relationship("Lesson", back_populates="questions")
@@ -88,6 +94,8 @@ class Wallet(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=False)
-    token_balance = Column(Integer, default=0)
-    
+    token_balance = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
     user = relationship("User", back_populates="wallet")
