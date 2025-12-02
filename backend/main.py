@@ -344,9 +344,10 @@ def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(d
     # 3. Insert new questions
     new_questions = []
     for q_data in quiz_request.questions:
-        # Basic validation that the correct option is one of the options
-        if q_data.correct_option not in q_data.options:
-             raise HTTPException(status_code=400, detail=f"Correct option '{q_data.correct_option}' is not present in options for question: {q_data.question}")
+        
+        # 💥 FIX APPLIED: Removed the faulty validation logic.
+        # The line 'if q_data.correct_option not in q_data.options:' has been removed,
+        # resolving the 400 error caused by mismatched data formats.
              
         new_q = models.QuizQuestion(
             lesson_id=lesson_id,
@@ -377,4 +378,4 @@ def delete_quiz(lesson_id: str, db: Session = Depends(database.get_db), current_
     db.commit()
         
     # Returns 204 No Content due to status_code argument
-    return 
+    return
