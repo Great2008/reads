@@ -334,16 +334,15 @@ def delete_lesson(lesson_id: str, db: Session = Depends(database.get_db), curren
 def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Creates/Updates the quiz questions for a lesson (Admin Only)."""
     
-    # Ensure current user is admin (Checked by dependency, but good for logging)
+    # Ensures current user is admin (Checked by dependency, but good for logging)
     if not current_admin.is_admin:
         # This shouldn't be reached if dependency works, but acts as a safeguard
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
     lesson_id = quiz_request.lesson_id
+    lesson_id_str = str(lesson_id)
     
-    # 1. Verify Lesson exists, ensuring the UUID is correctly handled
-    # Convert to string for consistent database query if SQLAlchemy is having issues with the UUID object
-    lesson_id_str = str(lesson_id) 
+    # 1. Verify Lesson exists, using the string representation for consistency
     lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id_str).first()
     
     if not lesson:
@@ -356,11 +355,9 @@ def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(d
     # 3. Insert new questions
     new_questions = []
     for q_data in quiz_request.questions:
-        
-        # Validation for correct_option removed in previous step, now focusing on insertion.
              
         new_q = models.QuizQuestion(
-            lesson_id=lesson_id, # Can use the UUID object here, SQLAlchemy usually handles it fine on insert
+            lesson_id=lesson_id, 
             question=q_data.question,
             options=q_data.options,
             correct_option=q_data.correct_option
@@ -369,7 +366,7 @@ def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(d
     
     db.add_all(new_questions)
     
-    # 4. Attempt commit and handle potential database errors (e.g., integrity errors)
+    # 4. Attempt commit and handle potential database errors
     try:
         db.commit()
     except Exception as e:
@@ -396,4 +393,5 @@ def delete_quiz(lesson_id: str, db: Session = Depends(database.get_db), current_
     db.commit()
         
     # Returns 204 No Content due to status_code argument
-    return 
+    return
+
