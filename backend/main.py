@@ -80,33 +80,22 @@ def signup_user(user_data: schemas.UserCreate, db: Session = Depends(database.ge
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# 💥 FIX/DEBUG: Clean login signature and server-side debugging added
+# 🧹 CLEANUP: Removed temporary debug logs
 @app.post("/auth/login", response_model=schemas.Token)
 def login_for_access_token(login_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
     
     # 1. Find user by email
     user = db.query(models.User).filter(models.User.email == login_data.email).first()
     
-    # 2. Check if user exists
-    if not user:
-        print(f"LOGIN FAIL (401): User not found for email: {login_data.email}")
+    # 2. Check if user exists or password matches
+    if not user or not auth.verify_password(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    # 3. Verify password
-    if not auth.verify_password(login_data.password, user.password_hash):
-        print(f"LOGIN FAIL (401): Password mismatch for user: {login_data.email}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # 4. Login success
-    print(f"LOGIN SUCCESS: User {login_data.email} logged in.")
+    # 3. Create token and return
     access_token = auth.create_access_token(
         data={"sub": str(user.id)}
     )
@@ -273,9 +262,30 @@ def get_wallet_balance(current_user: models.User = Depends(auth.get_current_user
 
     return {"token_balance": wallet.token_balance}
 
-@app.get("/rewards/history", response_model=List[schemas.RewardHistory])
-def reward_history(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    return db.query(models.Reward).filter(models.Reward.user_id == current_user.id).all()
+# 🚀 FIX: Corrected endpoint from /rewards/history to /wallet/history and updated data structure
+@app.get("/wallet/history", response_model=List[schemas.RewardHistory])
+def get_wallet_history(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Returns the recent reward history for the authenticated user, including lesson title."""
+    
+    # 1. Join Reward with Lesson to get the lesson title
+    rewards_history = db.query(models.Reward, models.Lesson)\
+        .join(models.Lesson, models.Reward.lesson_id == models.Lesson.id)\
+        .filter(models.Reward.user_id == current_user.id)\
+        .order_by(desc(models.Reward.created_at))\
+        .limit(20)\
+        .all()
+        
+    # 2. Format the output to match the RewardHistory schema (with lesson_title and type)
+    return [
+        schemas.RewardHistory(
+            id=reward.id,
+            lesson_title=lesson.title,
+            tokens_earned=reward.tokens_earned,
+            created_at=reward.created_at,
+            type="Reward" # Matches the expected type in WalletModule.jsx
+        )
+        for reward, lesson in rewards_history
+    ]
 
 @app.get("/rewards/summary", response_model=schemas.RewardSummary)
 def reward_summary(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
@@ -296,7 +306,6 @@ def get_users(db: Session = Depends(database.get_db), current_admin: models.User
     return db.query(models.User).all()
 
 @app.put("/admin/users/{user_id}/promote", status_code=status.HTTP_200_OK)
-# Changed to PUT for full resource update of admin status. PATCH is also acceptable.
 def promote_user(user_id: str, is_admin: bool, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Promotes/Demotes a user by setting is_admin flag (Admin Only)."""
     try:
@@ -316,7 +325,6 @@ def promote_user(user_id: str, is_admin: bool, db: Session = Depends(database.ge
     db.commit()
     return {"message": f"User {user.name} admin status set to {is_admin}"}
 
-# 💥 RESTORED: This was missing and caused the 'failed to fetch lessons list' error
 @app.get("/admin/lessons", response_model=List[schemas.LessonBase])
 def get_all_lessons(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Returns a list of all lessons for Admin Content Management (Admin Only)."""

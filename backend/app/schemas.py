@@ -22,13 +22,12 @@ class UserProfile(BaseModel):
     id: UUID
     name: str
     email: EmailStr
-    is_admin: bool # 💥 UPGRADE: Admin Flag
+    is_admin: bool # 💡 UPGRADE: Admin Flag
     created_at: datetime
     
     class Config:
         from_attributes = True
 
-# 🟢 FIX: Renamed from WalletBalance to TokenBalance to resolve Vercel crash
 class TokenBalance(BaseModel):
     token_balance: int
 
@@ -61,7 +60,7 @@ class CategoryResponse(BaseModel):
     category: str
     count: int
 
-# 💥 NEW: Schema for Lesson Creation (Admin Input)
+# 💡 NEW: Schema for Lesson Creation (Admin Input)
 class LessonCreate(BaseModel):
     category: str
     title: str
@@ -71,13 +70,13 @@ class LessonCreate(BaseModel):
 
 
 # --- Quiz Schemas ---
-# 💥 NEW: Schema for creating a Quiz Question
+# 💡 NEW: Schema for creating a Quiz Question
 class QuizQuestionBase(BaseModel):
     question: str
     options: List[str] 
     correct_option: str # The correct option identifier, e.g., "A"
 
-# 💥 NEW: Schema for creating a batch of quiz questions (Admin Input)
+# 💡 NEW: Schema for creating a batch of quiz questions (Admin Input)
 class QuizCreateRequest(BaseModel):
     lesson_id: UUID
     questions: List[QuizQuestionBase]
@@ -100,12 +99,25 @@ class QuizResultResponse(BaseModel):
     correct: int
     wrong: int
     tokens_awarded: int
+    
+    class Config:
+        from_attributes = True
 
 # --- Reward Schemas ---
+class RewardSummary(BaseModel):
+    total_tokens_earned: int
+    total_quizzes_passed: int
+    
+    class Config:
+        from_attributes = True
+
+# 🚀 NEW/FIXED: Schema to display detailed reward history on the frontend
 class RewardHistory(BaseModel):
+    id: UUID
+    lesson_title: str
     tokens_earned: int
     created_at: datetime
-    lesson_id: UUID
+    type: str # e.g., "Reward", required by WalletModule.jsx logic
 
-class RewardSummary(BaseModel):
-    total_earned: int
+    class Config:
+        from_attributes = True
