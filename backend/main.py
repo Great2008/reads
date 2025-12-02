@@ -87,7 +87,7 @@ def promote_or_demote_user(
     return {"message": f"User {user.name} successfully {action}."}
 
 
-# 💥 NEW ENDPOINT: GET /admin/lessons
+# GET /admin/lessons (Fix for previous 404 error)
 @app.get("/admin/lessons", response_model=List[schemas.LessonBase])
 def get_all_lessons(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Returns a list of all lessons for Admin Content Management (Admin Only)."""
@@ -271,19 +271,34 @@ def signup(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     access_token = auth.create_access_token(data={"sub": str(new_user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
+# 💥 FIX/DEBUG: Added print statements to pinpoint 401 login failure
 # POST /auth/login
 @app.post("/auth/login", response_model=schemas.Token)
 def login_for_access_token(form_data: auth.OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+    
     # 1. Authenticate the user
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     
-    if not user or not auth.verify_password(form_data.password, user.password_hash):
+    if not user:
+        # User not found (Incorrect username/email)
+        print(f"LOGIN FAIL: User not found for email: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    if not auth.verify_password(form_data.password, user.password_hash):
+        # Password mismatch (Incorrect password)
+        print(f"LOGIN FAIL: Password mismatch for user: {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Login successful
+    print(f"LOGIN SUCCESS: User {user.email} logged in.")
     # 2. Create token and return
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -294,8 +309,6 @@ def login_for_access_token(form_data: auth.OAuth2PasswordRequestForm = Depends()
 @app.get("/profile", response_model=schemas.UserProfile)
 def read_profile(current_user: models.User = Depends(auth.get_current_user)):
     """Returns the authenticated user's profile information."""
-    # The current_user object retrieved by the dependency already contains all necessary data.
-    # We use a UserProfile schema to format the output.
     return current_user
 
 # GET /profile/stats
