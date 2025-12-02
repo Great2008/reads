@@ -26,8 +26,7 @@ const handleFailedResponse = async (res, action) => {
     
     // NOTE: Using a custom modal/toast is preferred over alert() in a real app,
     // but for quick debugging here, we'll keep the direct feedback for now.
-    // **IMPORTANT:** Since the React component uses a Toast, this `alert()` might be redundant, 
-    // but we keep the `throw` to ensure the component's `catch` block is activated.
+    // **IMPORTANT:** Since the React component uses a Toast, this console.error ensures the failure is logged.
     console.error(`${action} Failed: ${errorDetail}`); 
     throw new Error(errorDetail);
 }
@@ -128,13 +127,11 @@ export const api = {
                 duration: '15 min' // Hardcoded duration for display
             }));
         },
-        // 🛑 FIX: The backend route is /lessons/{lessonId}, not /lesson/{lessonId}
         getLessonDetail: async (lessonId) => {
             const res = await fetch(`${API_URL}/lessons/${lessonId}`, { headers: getAuthHeader() });
             if (!res.ok) return null;
             return res.json();
         },
-        // 🛑 FIX: The backend route is /lessons/{lessonId}/quiz, not /quiz/lesson/{lessonId}
         getQuizQuestions: async (lessonId) => {
             const res = await fetch(`${API_URL}/lessons/${lessonId}/quiz`, { headers: getAuthHeader() });
             if (!res.ok) return [];
@@ -226,8 +223,7 @@ export const api = {
             return {};
         },
 
-        // 2. Upload/Update Quiz (Renamed and modified payload)
-        // AdminModule calls this as uploadQuiz(lessonId, quizQuestions)
+        // 2. Upload/Update Quiz (Matches component name and expected payload structure)
         uploadQuiz: async (lessonId, questions) => {
             const quizRequest = {
                 lesson_id: lessonId,
@@ -259,3 +255,4 @@ export const api = {
         }
     }
 };
+
