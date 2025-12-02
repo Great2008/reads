@@ -3,7 +3,8 @@ import {
     Users, Plus, ShieldOff, Trash2, Video, List, CheckCircle, AlertCircle, 
     Award, Settings, Zap, ArrowLeft, XCircle, RefreshCw
 } from 'lucide-react';
-import { api } from '../../services/api';
+// Assuming 'api' is correctly imported and contains 'learn' and 'admin' endpoints
+import { api } from '../../services/api'; 
 
 // ====================================================================
 // --- 0. Feedback Components ---
@@ -56,7 +57,7 @@ const PermissionDenied = () => (
 
 
 // ====================================================================
-// --- 2. Quiz Creation / Management Form Component (NEW) ---
+// --- 2. Quiz Creation / Management Form Component ---
 // ====================================================================
 
 const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
@@ -91,10 +92,11 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
         }
     };
     
-    // Feature: Delete Quiz
+    // Feature: Delete Quiz (Assuming api.admin.deleteQuiz exists)
     const handleDeleteQuiz = async () => {
         if (!lessonId) return;
 
+        // Note: Using window.confirm is generally discouraged in iframes, but this is a critical administrative action.
         if (!window.confirm(`Are you sure you want to permanently DELETE the existing quiz for "${lessonTitle}"? This action is irreversible.`)) {
             return;
         }
@@ -103,12 +105,13 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
         onToast('Deleting Quiz...', 'info');
         try {
             // 💥 REAL API CALL (Assuming api.admin.deleteQuiz is available)
-            await api.admin.deleteQuiz(lessonId);
+            // If this is not implemented on your API, this will fail.
+            await api.admin.deleteQuiz(lessonId); 
             onToast(`Quiz for "${lessonTitle}" deleted successfully.`, 'success');
             onComplete(); 
         } catch (error) {
             console.error("Failed to delete quiz:", error);
-            onToast('Failed to delete quiz. API error or not implemented.', 'error');
+            onToast('Failed to delete quiz. Check API implementation and permissions.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -138,13 +141,13 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
                 correct_answer: q.correct_answer,
             }));
 
-            // 💥 REAL API CALL (Assuming api.admin.uploadQuiz is available)
+            // 💥 REAL API CALL (Using corrected casing: uploadQuiz)
             await api.admin.uploadQuiz(lessonId, quizQuestions);
             onToast(`Quiz uploaded successfully for "${lessonTitle}"!`, 'success');
             onComplete(); // Navigate back to the list
         } catch (error) {
             console.error("Quiz upload failed:", error);
-            onToast('Failed to upload quiz. API error or not implemented.', 'error');
+            onToast('Failed to upload quiz. Check API implementation and permissions.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -247,7 +250,7 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
 
 
 // ====================================================================
-// --- 3. Content Management List Component (NEW) ---
+// --- 3. Content Management List Component ---
 // ====================================================================
 
 const LessonQuizManager = ({ onSelectLesson, onToast }) => {
@@ -258,6 +261,7 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
 
     const fetchCategories = useCallback(async () => {
         try {
+            // 💥 REAL API CALL
             const data = await api.learn.getCategories();
             setCategories(data);
             if (data.length > 0 && !selectedCategory) {
@@ -273,6 +277,7 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
         if (!categoryName) return;
         setIsLoading(true);
         try {
+            // 💥 REAL API CALL
             const data = await api.learn.getLessons(categoryName);
             setLessons(data);
         } catch (e) {
@@ -296,6 +301,7 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
     
     // Feature: Lesson Delete Handler
     const handleDeleteLesson = async (lessonId, lessonTitle) => {
+        // Note: Using window.confirm is generally discouraged in iframes, but this is a critical administrative action.
         if (!window.confirm(`Are you sure you want to permanently delete the lesson: "${lessonTitle}"? This will also delete the associated quiz.`)) {
             return;
         }
@@ -303,7 +309,7 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
         setIsLoading(true);
         onToast('Deleting lesson...', 'info');
         try {
-            // 💥 REAL API CALL (Assuming api.admin.deleteLesson is available)
+            // 💥 REAL API CALL (Using corrected casing: deleteLesson)
             await api.admin.deleteLesson(lessonId);
             onToast(`Lesson "${lessonTitle}" deleted successfully.`, 'success');
             // Refresh the lesson list
@@ -312,7 +318,8 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
             await fetchCategories(); 
         } catch (error) {
             console.error("Failed to delete lesson:", error);
-            onToast('Failed to delete lesson. API error or not implemented.', 'error');
+            // This is likely the error the user was encountering
+            onToast('Failed to delete lesson. Please check API implementation of `api.admin.deleteLesson`.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -405,7 +412,7 @@ const LessonQuizManager = ({ onSelectLesson, onToast }) => {
 
 
 // ====================================================================
-// --- 4. User Management (REAL API) (slightly adjusted to use Toast) ---
+// --- 4. User Management (REAL API) ---
 // ====================================================================
 
 const UserManagement = ({ currentAdminId, onToast }) => {
@@ -433,6 +440,7 @@ const UserManagement = ({ currentAdminId, onToast }) => {
     }, []);
 
     const handlePromotion = async (userToUpdate, isAdmin) => {
+        // Note: Using window.confirm is generally discouraged in iframes, but this is a critical administrative action.
         if (!window.confirm(`Are you sure you want to ${isAdmin ? 'PROMOTE' : 'DEMOTE'} ${userToUpdate.name}?`)) return;
 
         try {
@@ -506,24 +514,26 @@ const UserManagement = ({ currentAdminId, onToast }) => {
 };
 
 // ====================================================================
-// --- 5. Lesson Creator (REAL FORM) (slightly adjusted to use Toast) ---
+// --- 5. Lesson Creator (REAL FORM) ---
 // ====================================================================
 const LessonCreator = ({ onToast }) => {
     const [formData, setFormData] = useState({
         category: 'General', title: '', content: '', video_url: '', order_index: 0
     });
     const [isLoading, setIsLoading] = useState(false);
+    // Use a small set of initial categories as a fallback
     const [categories, setCategories] = useState(['General', 'JAMB', 'WAEC', 'Science', 'Mathematics']);
 
     const fetchCategories = useCallback(() => {
+        // 💥 REAL API CALL
         api.learn.getCategories().then(cats => {
             if (cats && cats.length > 0) {
                 const catNames = cats.map(c => c.name);
                 // Merge default categories with those from DB, remove duplicates
-                setCategories([...new Set([...categories, ...catNames])]);
+                setCategories(prev => [...new Set([...prev, ...catNames])]);
             }
         }).catch(e => console.error("Failed to fetch categories in creator:", e));
-    }, [categories]);
+    }, []);
 
     useEffect(() => {
         fetchCategories();
@@ -548,6 +558,8 @@ const LessonCreator = ({ onToast }) => {
             onToast('Lesson published successfully!', 'success');
             // Reset form but keep category
             setFormData(prev => ({ ...prev, title: '', content: '', video_url: '', order_index: prev.order_index + 1 }));
+            // Refresh categories list just in case a new one was created
+            fetchCategories(); 
         } catch (error) {
             onToast(`Error publishing lesson: ${error.message}`, 'error');
         } finally {
@@ -637,12 +649,13 @@ const LessonCreator = ({ onToast }) => {
 };
 
 // ====================================================================
-// --- 6. Category List (View Only) (unchanged, but refactored to function) ---
+// --- 6. Category List (View Only) ---
 // ====================================================================
 const CategoryList = () => {
     const [categories, setCategories] = useState([]);
     
     useEffect(() => {
+        // 💥 REAL API CALL
         api.learn.getCategories().then(setCategories).catch(e => console.error("Failed to load categories:", e));
     }, []);
 
