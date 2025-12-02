@@ -2,29 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle } from 'lucide-react';
 import { api } from '../../services/api';
 
-// --- Sub-Components ---
+// ====================================================================
+// --- 1. Lesson Detail View Component (Full Data Expected) ---
+// ====================================================================
 
-// Component 1: Lesson Detail View
-// NOTE: This component now defends against 'lesson.content' being null or undefined
 const LessonDetailView = ({ lesson, onNavigate }) => {
+    // Note: We assume 'lesson' here is the FULL detail object fetched by the DataLoader
     
-    // 🟢 FIX: Ensure lesson.content is a string before calling .replace()
-    const safeContent = (lesson.content || '').replace(/\n/g, '<br/>');
+    // Defensive check to prevent crash if content is missing
+    const safeContent = (lesson.content || 'Content not available.').replace(/\n/g, '<br/>');
 
     // Utility function to get the video ID for embedding
     const getEmbedUrl = (url) => {
         if (!url) return null;
         if (url.includes('youtube.com/watch?v=')) {
-            // Extract v= parameter value
             const match = url.match(/[?&]v=([^&]+)/);
             return match ? `https://www.youtube.com/embed/${match[1]}` : url;
         }
-        return url.startsWith('http') ? url : `https://www.youtube.com/embed/${url}`; // Assume it's an ID if not a full URL
+        return url.startsWith('http') ? url : `https://www.youtube.com/embed/${url}`;
     };
 
     return (
         <div className="space-y-6 animate-fade-in">
-            <button onClick={() => onNavigate('learn', 'list', lesson.category)} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 dark:text-indigo-400 dark:hover:text-indigo-300">
+            <button onClick={() => onNavigate('learn', 'list', { name: lesson.category })} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 dark:text-indigo-400 dark:hover:text-indigo-300">
                 <ArrowLeft size={16} className="mr-1" /> Back to Lessons
             </button>
             <h2 className="text-3xl font-bold dark:text-white">{lesson.title}</h2>
@@ -37,7 +37,6 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
                 <h3 className="text-xl font-bold mb-4 dark:text-white">Content Overview</h3>
                 <div 
                     className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 space-y-4"
-                    // 🟢 FIX APPLIED HERE: Use safeContent
                     dangerouslySetInnerHTML={{ __html: safeContent }} 
                 />
             </div>
@@ -47,7 +46,7 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
                     <h3 className="text-xl font-bold mb-3 dark:text-white">Video Lecture</h3>
                     <iframe
                         className="w-full aspect-video rounded-xl shadow-lg border border-gray-200 dark:border-slate-700"
-                        src={getEmbedUrl(lesson.video_url)} // Use utility function to ensure valid embed URL
+                        src={getEmbedUrl(lesson.video_url)}
                         title="Video Lecture"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
@@ -56,8 +55,8 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
             )}
 
             <button
-                // 🟢 FIX: Pass the lesson ID explicitly to the quiz view
-                onClick={() => onNavigate('learn', 'quiz', { lessonId: lesson.id, lessonTitle: lesson.title })} 
+                // Pass the necessary IDs/titles for the quiz start
+                onClick={() => onNavigate('learn', 'quiz', { lessonId: lesson.id, lessonTitle: lesson.title, category: lesson.category })} 
                 className="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 mt-6"
             >
                 <Award size={20} /> Start Quiz to Earn $READS
@@ -66,35 +65,41 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
     );
 };
 
-// Component 2: Quiz View
-const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { // 🟢 NOTE: Renamed 'lesson' prop to 'lessonData' for clarity
-    const lessonId = lessonData.lessonId;
-    const lessonTitle = lessonData.lessonTitle;
+// ====================================================================
+// --- 2. Quiz View Component ---
+// ====================================================================
+
+const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { 
+    const { lessonId, lessonTitle, category } = lessonData;
     
+    // ... (rest of your existing QuizView state and logic) ...
     const [questions, setQuestions] = useState([]);
     const [step, setStep] = useState(0);
     const [selectedAnswer, setSelectedAnswer] = useState(null);
-    const [answers, setAnswers] = useState({}); // { question_id: selected_option_char }
-    const [quizResult, setQuizResult] = useState(null); // { score, correct, wrong, tokens_awarded }
+    const [answers, setAnswers] = useState({}); 
+    const [quizResult, setQuizResult] = useState(null); 
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        // Use the ID from the prop to fetch questions
-        api.learn.getQuizQuestions(lessonId).then(setQuestions);
-    }, [lessonId]);
+        // Ensure ID is present before fetching
+        if (lessonId) {
+            api.learn.getQuizQuestions(lessonId).then(setQuestions).catch(e => {
+                console.error("Failed to load quiz questions:", e);
+                // Handle navigation back on error
+                onNavigate('learn', 'detail', lessonId);
+            });
+        }
+    }, [lessonId, onNavigate]);
 
-    // Handle user selecting an option for the current question
     const handleAnswerSelect = (optionChar) => {
         setSelectedAnswer(optionChar);
     };
     
-    // Move to the next question or submit
     const handleNext = async () => {
         if (selectedAnswer === null) return;
 
         const currentQuestion = questions[step];
         
-        // 1. Record the answer
         const newAnswers = { 
             ...answers, 
             [currentQuestion.id]: selectedAnswer 
@@ -102,14 +107,11 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { // 🟢 NOTE:
         setAnswers(newAnswers);
         setSelectedAnswer(null);
 
-        // 2. Check if this was the last question
         if (step < questions.length - 1) {
             setStep(step + 1);
         } else {
-            // 3. Submit the final quiz
             setIsLoading(true);
             try {
-                // Convert answers map to the array format required by the API
                 const submissionArray = Object.entries(newAnswers).map(([q_id, selected]) => ({
                     question_id: q_id,
                     selected: selected
@@ -117,15 +119,12 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { // 🟢 NOTE:
 
                 const result = await api.learn.submitQuiz(lessonId, submissionArray);
                 setQuizResult(result);
-                // Update the global wallet balance (pass the new balance)
-                // The API result usually returns the tokens awarded, not the total balance.
-                // We trust the onUpdateWallet handler to manage the balance update (e.g., fetching new balance or adding to old)
                 onUpdateWallet(result.tokens_awarded); 
             } catch (e) {
                 console.error("Quiz submission failed:", e);
+                // NOTE: Using a custom modal/message is preferred over alert()
                 alert("Failed to submit quiz. Please try again.");
-                // 🟢 Navigate back to lesson detail on failure
-                onNavigate('learn', 'detail', { id: lessonId }); 
+                onNavigate('learn', 'detail', lessonId); // Go back to lesson ID
             } finally {
                 setIsLoading(false);
             }
@@ -136,15 +135,15 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { // 🟢 NOTE:
         return <div className="p-8 text-center dark:text-white">Submitting Quiz and Calculating Rewards...</div>;
     }
 
-    if (!questions.length) {
-        return <div className="p-8 text-center dark:text-white">Loading quiz questions...</div>;
+    if (!questions.length && !quizResult) {
+        return <div className="p-8 text-center dark:text-white">Loading quiz questions for "{lessonTitle}"...</div>;
     }
     
     // Quiz Result View
     if (quizResult) {
         const { score, correct, wrong, tokens_awarded } = quizResult;
         return (
-            <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-xl space-y-6 animate-fade-in">
+            <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-xl space-y-6 animate-fade-in border border-gray-100 dark:border-slate-700">
                 <CheckCircle size={60} className="text-green-500 mx-auto" />
                 <h2 className="text-3xl font-bold dark:text-white">Quiz Completed!</h2>
                 
@@ -180,7 +179,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { // 🟢 NOTE:
     return (
         <div className="animate-fade-in">
             <button 
-                onClick={() => onNavigate('learn', 'detail', { id: lessonId })} 
+                onClick={() => onNavigate('learn', 'detail', lessonId)} 
                 className="flex items-center text-gray-500 hover:text-gray-700 text-sm font-medium mb-6 dark:text-gray-400"
             >
                 <ArrowLeft size={16} className="mr-1" /> Back to Lesson
@@ -232,7 +231,65 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { // 🟢 NOTE:
     );
 };
 
-// --- Main Learn Module ---
+// ====================================================================
+// --- 3. Lesson Data Loader (New Wrapper Component) ---
+// ====================================================================
+
+const LessonDataLoader = ({ lessonId, onNavigate }) => {
+    const [lessonData, setLessonData] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        setLoading(true);
+        const fetchDetail = async () => {
+            if (!lessonId) {
+                console.error("Loader received no lesson ID.");
+                setLoading(false);
+                return;
+            }
+            try {
+                // 🟢 CRITICAL: Fetch the full lesson detail here
+                const data = await api.learn.getLessonDetail(lessonId); 
+                setLessonData(data);
+            } catch (error) {
+                console.error("Error fetching lesson detail:", error);
+                setLessonData(null); // Explicitly clear on error
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDetail();
+    }, [lessonId]);
+
+    if (loading) {
+        return <div className="p-8 text-center dark:text-white">Fetching lesson details...</div>;
+    }
+
+    if (!lessonData) {
+        return (
+            <div className="text-center p-8 bg-red-50 border border-red-200 rounded-xl dark:bg-red-900/20 dark:border-red-800">
+                <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">Error Loading Lesson</h2>
+                <p className="text-red-500 dark:text-red-300 mt-2">The lesson details could not be found or loaded.</p>
+                <button 
+                    onClick={() => onNavigate('learn', 'categories')} 
+                    className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition duration-150"
+                >
+                    Go Back to Categories
+                </button>
+            </div>
+        );
+    }
+    
+    // Pass the fully loaded lesson data to the view component
+    return <LessonDetailView lesson={lessonData} onNavigate={onNavigate} />;
+};
+
+
+// ====================================================================
+// --- 4. Main Learn Module ---
+// ====================================================================
+
 export default function LearnModule({ subView, activeData, onNavigate, onUpdateWallet }) {
     const [categories, setCategories] = useState([]);
     const [lessons, setLessons] = useState([]);
@@ -247,9 +304,12 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
     // Fetch Lessons when switching to the 'list' subView
     useEffect(() => {
         if (subView === 'list' && activeData?.name) {
-            api.learn.getLessons(activeData.name).then(setLessons);
+            // Check if lessons already match the category, otherwise fetch
+            if (!lessons.length || lessons[0]?.category !== activeData.name) {
+                api.learn.getLessons(activeData.name).then(setLessons);
+            }
         }
-    }, [subView, activeData]);
+    }, [subView, activeData, lessons]);
 
     // 1. Categories View
     if (subView === 'categories') {
@@ -295,8 +355,8 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
                     {lessons.map(lesson => (
                         <button 
                             key={lesson.id} 
-                            // 🟢 FIX: Pass the full lesson object for LessonDetailView to use
-                            onClick={() => onNavigate('learn', 'detail', lesson)} 
+                            // 🟢 CRITICAL FIX: Only pass the ID, not the full summary object
+                            onClick={() => onNavigate('learn', 'detail', lesson.id)} 
                             className="w-full text-left bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm flex items-center justify-between group hover:shadow-md transition-all border border-gray-100 dark:border-slate-700"
                         >
                             <div className="flex items-center gap-4">
@@ -317,14 +377,15 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
         );
     }
 
-    // 3. Lesson Detail View
+    // 3. Lesson Detail View (uses the new DataLoader)
     if (subView === 'detail') {
-        return <LessonDetailView lesson={activeData} onNavigate={onNavigate} />;
+        // activeData is now expected to be just the lesson ID string
+        return <LessonDataLoader lessonId={activeData} onNavigate={onNavigate} />;
     }
 
     // 4. Quiz View
     if (subView === 'quiz') {
-        // activeData is now an object: { lessonId: UUID, lessonTitle: string }
+        // activeData is an object: { lessonId, lessonTitle, category }
         return <QuizView lessonData={activeData} onNavigate={onNavigate} onUpdateWallet={onUpdateWallet} />;
     }
 
@@ -341,7 +402,4 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
         </div>
     );
 }
-
-//This updated file implements the crucial fix:
-const safeContent = (lesson.content || '').replace(/\n/g, '<br/>');
 
