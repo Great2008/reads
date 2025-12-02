@@ -127,16 +127,25 @@ def get_lessons_by_category(category_name: str, db: Session = Depends(database.g
 
 @app.get("/lessons/{lesson_id}", response_model=schemas.LessonDetail)
 def get_lesson_detail(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """
+    Fetches a specific lesson by ID.
+    CRITICAL: Logs the failure reason for debugging 'Error loading lesson'.
+    """
     try:
+        # 1. Attempt UUID conversion (400 if invalid format)
         lesson_uuid = UUID(lesson_id)
-    except ValueError:
+    except ValueError as e:
+        print(f"ERROR 400: Invalid Lesson ID format received: '{lesson_id}'. Error: {e}")
         raise HTTPException(status_code=400, detail="Invalid lesson ID format")
         
+    # 2. Query the database
     lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_uuid).first()
     if not lesson:
+        # 404 if lesson not found
+        print(f"ERROR 404: Lesson not found for ID: {lesson_id}")
         raise HTTPException(status_code=404, detail="Lesson not found")
 
-    # Record progress (upsert logic - simple set completed=True)
+    # 3. Record progress (upsert logic - simple set completed=True)
     progress = db.query(models.LessonProgress).filter(
         models.LessonProgress.user_id == current_user.id,
         models.LessonProgress.lesson_id == lesson_uuid
@@ -149,7 +158,12 @@ def get_lesson_detail(lesson_id: str, db: Session = Depends(database.get_db), cu
             completed=True
         )
         db.add(progress)
-        db.commit()
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Warning: Failed to record lesson progress for user {current_user.id} and lesson {lesson_uuid}. Error: {e}")
+            # Continue execution even if progress fails
     
     return lesson
 
@@ -346,7 +360,7 @@ def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(d
     lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id_str).first()
     
     if not lesson:
-        print(f"Quiz Upload Fail: Lesson ID {lesson_id_str} not found.")
+        print(f"Quiz Upload Fail (404): Lesson ID {lesson_id_str} not found.")
         raise HTTPException(status_code=404, detail="Lesson not found for quiz association")
 
     # 2. Delete existing quiz questions for this lesson (to ensure clean update/overwrite)
@@ -371,7 +385,7 @@ def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(d
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"Database error during quiz upload: {e}")
+        print(f"Database error (500) during quiz upload: {e}")
         # Raising a 500 allows us to catch database integrity/connection issues
         raise HTTPException(status_code=500, detail="Database integrity error during quiz save.")
     
@@ -394,4 +408,3 @@ def delete_quiz(lesson_id: str, db: Session = Depends(database.get_db), current_
         
     # Returns 204 No Content due to status_code argument
     return
-
