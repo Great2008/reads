@@ -61,10 +61,11 @@ const PermissionDenied = () => (
 // ====================================================================
 
 const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
+    // FIX: Changed correct_answer to correct_option to match expected backend schema (schemas.py)
     const initialQuestion = {
         question: '',
         options: ['', '', '', ''],
-        correct_answer: '', // 'A', 'B', 'C', or 'D'
+        correct_option: '', // 'A', 'B', 'C', or 'D'
     };
 
     const [questions, setQuestions] = useState([initialQuestion]);
@@ -105,7 +106,6 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
         onToast('Deleting Quiz...', 'info');
         try {
             // 💥 REAL API CALL (Assuming api.admin.deleteQuiz is available)
-            // If this is not implemented on your API, this will fail.
             await api.admin.deleteQuiz(lessonId); 
             onToast(`Quiz for "${lessonTitle}" deleted successfully.`, 'success');
             onComplete(); 
@@ -125,7 +125,8 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
 
         // Basic validation
         const isValid = questions.every(q => 
-            q.question && q.options.every(opt => opt.trim() !== '') && ['A', 'B', 'C', 'D'].includes(q.correct_answer)
+            // FIX: Validating q.correct_option
+            q.question && q.options.every(opt => opt.trim() !== '') && ['A', 'B', 'C', 'D'].includes(q.correct_option)
         );
 
         if (!isValid) {
@@ -135,10 +136,11 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
         }
 
         try {
+            // FIX: Mapping to correct_option for the backend payload
             const quizQuestions = questions.map((q) => ({
                 question: q.question,
                 options: q.options,
-                correct_answer: q.correct_answer,
+                correct_option: q.correct_option,
             }));
 
             // 💥 REAL API CALL (Using corrected casing: uploadQuiz)
@@ -213,8 +215,10 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
                             <div className="mt-4 flex items-center gap-3 bg-indigo-50 dark:bg-slate-700 p-3 rounded-lg">
                                 <label className="font-medium text-gray-700 dark:text-gray-300">Correct Answer:</label>
                                 <select
-                                    value={q.correct_answer}
-                                    onChange={(e) => handleQuestionChange(qIndex, 'correct_answer', e.target.value)}
+                                    // FIX: Binding to correct_option
+                                    value={q.correct_option}
+                                    // FIX: Updating correct_option
+                                    onChange={(e) => handleQuestionChange(qIndex, 'correct_option', e.target.value)}
                                     className="p-2 border border-gray-300 rounded-lg dark:bg-slate-800 dark:border-slate-600 dark:text-white"
                                     required
                                 >
@@ -598,6 +602,7 @@ const LessonCreator = ({ onToast }) => {
                             type="text" 
                             placeholder="Or type new category..."
                             className="mt-2 w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white text-sm"
+                            // Note: This input overrides the select value if text is entered
                             onChange={(e) => setFormData(prev => ({...prev, category: e.target.value || 'General'}))}
                         />
                         <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Select an existing category or type a new one.</p>
