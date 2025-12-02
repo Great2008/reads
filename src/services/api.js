@@ -5,6 +5,7 @@ const API_URL = "/api";
 
 const getAuthHeader = () => {
     const token = localStorage.getItem('access_token');
+    // Using Bearer token authorization
     return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 };
 
@@ -25,7 +26,9 @@ const handleFailedResponse = async (res, action) => {
     
     // NOTE: Using a custom modal/toast is preferred over alert() in a real app,
     // but for quick debugging here, we'll keep the direct feedback for now.
-    alert(`${action} Failed: ${errorDetail}`); 
+    // **IMPORTANT:** Since the React component uses a Toast, this `alert()` might be redundant, 
+    // but we keep the `throw` to ensure the component's `catch` block is activated.
+    console.error(`${action} Failed: ${errorDetail}`); 
     throw new Error(errorDetail);
 }
 
@@ -176,7 +179,7 @@ export const api = {
         }
     },
     
-    // 🟢 NEW: ADMIN ENDPOINTS (Fixes getUsers undefined error)
+    // 🟢 ADMIN ENDPOINTS (Fixed/Completed)
     admin: {
         getUsers: async () => {
             const res = await fetch(`${API_URL}/admin/users`, { headers: getAuthHeader() });
@@ -206,17 +209,53 @@ export const api = {
             }
             return res.json();
         },
-        addQuizQuestions: async (quizRequest) => {
+        
+        // --- NEW/FIXED ADMIN CONTENT FUNCTIONS ---
+        
+        // 1. Delete Lesson (Required by AdminModule)
+        deleteLesson: async (lessonId) => {
+            const res = await fetch(`${API_URL}/admin/lessons/${lessonId}`, {
+                method: 'DELETE',
+                headers: getAuthHeader(),
+            });
+            // We expect the backend to also handle deleting the associated quiz/data
+            if (!res.ok) {
+                await handleFailedResponse(res, `Delete Lesson ID ${lessonId}`);
+            }
+            // No content expected on successful DELETE
+            return {};
+        },
+
+        // 2. Upload/Update Quiz (Renamed and modified payload)
+        // AdminModule calls this as uploadQuiz(lessonId, quizQuestions)
+        uploadQuiz: async (lessonId, questions) => {
+            const quizRequest = {
+                lesson_id: lessonId,
+                questions: questions
+            };
+            
             const res = await fetch(`${API_URL}/admin/quiz`, {
-                method: 'POST',
+                method: 'POST', // Use POST for create/overwrite quiz functionality
                 headers: getAuthHeader(),
                 body: JSON.stringify(quizRequest)
             });
             if (!res.ok) {
-                await handleFailedResponse(res, 'Add Quiz Questions');
+                await handleFailedResponse(res, 'Upload Quiz Questions');
             }
             return res.json();
+        },
+
+        // 3. Delete Quiz (Required by AdminModule's QuizCreationForm)
+        deleteQuiz: async (lessonId) => {
+            const res = await fetch(`${API_URL}/admin/quiz/${lessonId}`, {
+                method: 'DELETE',
+                headers: getAuthHeader(),
+            });
+            if (!res.ok) {
+                await handleFailedResponse(res, `Delete Quiz for Lesson ID ${lessonId}`);
+            }
+            // No content expected on successful DELETE
+            return {};
         }
     }
 };
-
