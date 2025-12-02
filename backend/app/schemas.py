@@ -22,17 +22,13 @@ class UserProfile(BaseModel):
     id: UUID
     name: str
     email: EmailStr
-    is_admin: bool # 徴 UPGRADE: Admin Flag
+    is_admin: bool # 💥 UPGRADE: Admin Flag
     created_at: datetime
     
     class Config:
         from_attributes = True
 
-# 徴 NEW: Schema for requesting an admin status change
-class AdminStatusUpdate(BaseModel):
-    is_admin: bool
-
-# 泙 FIX: Renamed from WalletBalance to TokenBalance to resolve Vercel crash
+# 🟢 FIX: Renamed from WalletBalance to TokenBalance to resolve Vercel crash
 class TokenBalance(BaseModel):
     token_balance: int
 
@@ -65,7 +61,7 @@ class CategoryResponse(BaseModel):
     category: str
     count: int
 
-# 徴 NEW: Schema for Lesson Creation (Admin Input)
+# 💥 NEW: Schema for Lesson Creation (Admin Input)
 class LessonCreate(BaseModel):
     category: str
     title: str
@@ -75,13 +71,13 @@ class LessonCreate(BaseModel):
 
 
 # --- Quiz Schemas ---
-# 徴 NEW: Schema for creating a Quiz Question
+# 💥 NEW: Schema for creating a Quiz Question
 class QuizQuestionBase(BaseModel):
     question: str
     options: List[str] 
-    correct_option: str # The correct option identifier, e.g., \"A\"
+    correct_option: str # The correct option identifier, e.g., "A"
 
-# 徴 NEW: Schema for creating a batch of quiz questions (Admin Input)
+# 💥 NEW: Schema for creating a batch of quiz questions (Admin Input)
 class QuizCreateRequest(BaseModel):
     lesson_id: UUID
     questions: List[QuizQuestionBase]
@@ -89,11 +85,11 @@ class QuizCreateRequest(BaseModel):
 class QuizQuestionResponse(BaseModel):
     id: UUID
     question: str
-    options: List[str] # e.g. [\"Option A\", \"Option B\"]
+    options: List[str] # e.g. ["Option A", "Option B"]
     
 class AnswerSubmission(BaseModel):
     question_id: UUID
-    selected: str # \"A\", \"B\", etc.
+    selected: str # "A", "B", etc.
 
 class QuizSubmitRequest(BaseModel):
     lesson_id: UUID
@@ -107,18 +103,9 @@ class QuizResultResponse(BaseModel):
 
 # --- Reward Schemas ---
 class RewardHistory(BaseModel):
-    id: UUID
-    lesson_id: UUID
     tokens_earned: int
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
-        
+    lesson_id: UUID
+
 class RewardSummary(BaseModel):
-    total_tokens_earned: int
-    
-class TokenAwardRequest(BaseModel):
-    user_id: UUID
-    amount: int
-    reason: str
+    total_earned: int
