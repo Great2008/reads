@@ -5,8 +5,14 @@ const API_URL = "/api";
 
 const getAuthHeader = () => {
     const token = localStorage.getItem('access_token');
-    // Using Bearer token authorization
-    return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+    // Using Bearer token authorization, always include Content-Type for JSON payloads
+    const headers = { 'Content-Type': 'application/json' };
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
 };
 
 // Helper function to process failed responses aggressively
@@ -24,9 +30,7 @@ const handleFailedResponse = async (res, action) => {
         errorDetail = `${errorDetail}. Server response: ${text.substring(0, 100)}...`; 
     }
     
-    // NOTE: Using a custom modal/toast is preferred over alert() in a real app,
-    // but for quick debugging here, we'll keep the direct feedback for now.
-    // **IMPORTANT:** Since the React component uses a Toast, this console.error ensures the failure is logged.
+    // **IMPORTANT:** Console error ensures the failure is logged and caught by the Toast component.
     console.error(`${action} Failed: ${errorDetail}`); 
     throw new Error(errorDetail);
 }
@@ -37,6 +41,7 @@ export const api = {
         login: async (email, password) => {
             const res = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
+                // Explicitly define headers here as getAuthHeader() might not contain the token yet
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
             });
@@ -47,12 +52,12 @@ export const api = {
             
             const data = await res.json();
             localStorage.setItem('access_token', data.access_token);
-            // We return the token data, but the main app calls `me()` next
             return data; 
         },
         signup: async (name, email, password) => {
             const res = await fetch(`${API_URL}/auth/signup`, {
                 method: 'POST',
+                // Explicitly define headers here as getAuthHeader() might not contain the token yet
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, password })
             });
@@ -176,7 +181,7 @@ export const api = {
         }
     },
     
-    // 🟢 ADMIN ENDPOINTS (Fixed/Completed)
+    // --- ADMIN ENDPOINTS ---
     admin: {
         getUsers: async () => {
             const res = await fetch(`${API_URL}/admin/users`, { headers: getAuthHeader() });
@@ -207,23 +212,19 @@ export const api = {
             return res.json();
         },
         
-        // --- NEW/FIXED ADMIN CONTENT FUNCTIONS ---
-        
-        // 1. Delete Lesson (Required by AdminModule)
+        // 1. Delete Lesson
         deleteLesson: async (lessonId) => {
             const res = await fetch(`${API_URL}/admin/lessons/${lessonId}`, {
                 method: 'DELETE',
                 headers: getAuthHeader(),
             });
-            // We expect the backend to also handle deleting the associated quiz/data
             if (!res.ok) {
                 await handleFailedResponse(res, `Delete Lesson ID ${lessonId}`);
             }
-            // No content expected on successful DELETE
             return {};
         },
 
-        // 2. Upload/Update Quiz (Matches component name and expected payload structure)
+        // 2. Upload/Update Quiz (POST to /admin/quiz)
         uploadQuiz: async (lessonId, questions) => {
             const quizRequest = {
                 lesson_id: lessonId,
@@ -231,7 +232,7 @@ export const api = {
             };
             
             const res = await fetch(`${API_URL}/admin/quiz`, {
-                method: 'POST', // Use POST for create/overwrite quiz functionality
+                method: 'POST',
                 headers: getAuthHeader(),
                 body: JSON.stringify(quizRequest)
             });
@@ -241,7 +242,7 @@ export const api = {
             return res.json();
         },
 
-        // 3. Delete Quiz (Required by AdminModule's QuizCreationForm)
+        // 3. Delete Quiz (DELETE to /admin/quiz/{lessonId})
         deleteQuiz: async (lessonId) => {
             const res = await fetch(`${API_URL}/admin/quiz/${lessonId}`, {
                 method: 'DELETE',
@@ -250,9 +251,7 @@ export const api = {
             if (!res.ok) {
                 await handleFailedResponse(res, `Delete Quiz for Lesson ID ${lessonId}`);
             }
-            // No content expected on successful DELETE
             return {};
         }
     }
 };
-
