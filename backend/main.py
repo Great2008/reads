@@ -282,14 +282,19 @@ def get_users(db: Session = Depends(database.get_db), current_admin: models.User
 @app.put("/admin/users/{user_id}/promote")
 def promote_user(user_id: str, is_admin: bool, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Promotes/Demotes a user by setting is_admin flag (Admin Only)."""
+    
+    # CRITICAL FIX: Added f-strings to include the user_id in the error detail for better debugging.
     try:
         user_uuid = UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+        # Returns 400 Bad Request with clear detail including the malformed ID
+        raise HTTPException(status_code=400, detail=f"Invalid user ID format: {user_id}")
         
     user = db.query(models.User).filter(models.User.id == user_uuid).first()
+    
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Returns 404 Not Found with clear detail
+        raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
         
     user.is_admin = is_admin
     db.commit()
@@ -303,46 +308,6 @@ def create_lesson(lesson_data: schemas.LessonCreate, db: Session = Depends(datab
     db.commit()
     db.refresh(new_lesson)
     return new_lesson
-
-# 🟢 FIX: Add GET endpoint for fetching all lessons (Admin Only) to resolve "Method Not Allowed"
-@app.get("/admin/lessons")
-def get_all_lessons(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Fetches all lessons for the admin manager, including quiz status (Admin Only)."""
-    
-    # Fetch all lessons
-    lessons = db.query(models.Lesson).order_by(
-        models.Lesson.category, 
-        models.Lesson.order_index
-    ).all()
-    
-    lessons_with_quiz = []
-    # Collect all lesson IDs for an efficient single query to check quiz existence
-    lesson_ids = [lesson.id for lesson in lessons]
-    
-    # Fetch all lesson IDs that have a quiz in one efficient query (avoiding N+1 queries)
-    quiz_questions = db.query(models.QuizQuestion.lesson_id).filter(
-        models.QuizQuestion.lesson_id.in_(lesson_ids)
-    ).distinct().all()
-    
-    # Convert result to a set of IDs for fast O(1) lookup
-    lessons_with_quiz_ids = {qid[0] for qid in quiz_questions}
-    
-    for lesson in lessons:
-        # Check the pre-fetched set
-        has_quiz = lesson.id in lessons_with_quiz_ids
-        
-        # Manually map to a dictionary to include the dynamic 'has_quiz' field
-        lessons_with_quiz.append({
-            "id": lesson.id,
-            "category": lesson.category,
-            "title": lesson.title,
-            "order_index": lesson.order_index,
-            # The frontend LessonQuizManager component relies on this:
-            "has_quiz": has_quiz 
-        })
-
-    return lessons_with_quiz
-
 
 # DELETE /admin/lessons/{lesson_id}
 @app.delete("/admin/lessons/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
