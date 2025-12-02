@@ -5,7 +5,6 @@ const API_URL = "/api";
 
 const getAuthHeader = () => {
     const token = localStorage.getItem('access_token');
-    // Using Bearer token authorization, always include Content-Type for JSON payloads
     const headers = { 'Content-Type': 'application/json' };
     
     if (token) {
@@ -20,28 +19,23 @@ const handleFailedResponse = async (res, action) => {
     let errorDetail = `Failed to ${action} (Status: ${res.status})`;
     
     try {
-        // Try to parse JSON for detailed error message (FastAPI standard)
         const data = await res.json();
         errorDetail = data.detail || errorDetail;
     } catch (e) {
-        // Fallback for Vercel 500 HTML page or other non-JSON errors
         const text = await res.text();
-        // Fallback for non-JSON errors (e.g., Vercel's internal 500 HTML page)
         errorDetail = `${errorDetail}. Server response: ${text.substring(0, 100)}...`; 
     }
     
-    // **IMPORTANT:** Console error ensures the failure is logged and caught by the Toast component.
     console.error(`${action} Failed: ${errorDetail}`); 
     throw new Error(errorDetail);
 }
 
 export const api = {
-    // --- AUTHENTICATION & USER STATE ---
+    // --- AUTH ---
     auth: {
         login: async (email, password) => {
             const res = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
-                // Explicitly define headers here as getAuthHeader() might not contain the token yet
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
             });
@@ -57,7 +51,6 @@ export const api = {
         signup: async (name, email, password) => {
             const res = await fetch(`${API_URL}/auth/signup`, {
                 method: 'POST',
-                // Explicitly define headers here as getAuthHeader() might not contain the token yet
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, password })
             });
@@ -77,26 +70,23 @@ export const api = {
             const res = await fetch(`${API_URL}/user/profile`, { headers: getAuthHeader() });
             
             if (!res.ok) {
-                // If token is expired/invalid, clear it and return null
                 localStorage.removeItem('access_token');
                 return null;
             }
             
             const data = await res.json();
-            // Map the API data to the local user object used by App.jsx
             return {
                 id: data.id,
                 name: data.name,
                 email: data.email,
                 is_admin: data.is_admin,
-                // Placeholder for Dashboard component
                 avatar: `https://api.dicebear.com/8.x/initials/svg?seed=${data.name}`, 
                 joined: data.created_at,
             };
         },
     },
 
-    // --- USER PROFILE & STATS ---
+    // --- PROFILE ---
     profile: {
         getStats: async () => {
             const res = await fetch(`${API_URL}/user/stats`, { headers: getAuthHeader() });
@@ -107,14 +97,13 @@ export const api = {
         },
     },
 
-    // --- LEARNING CONTENT ---
+    // --- LEARN ---
     learn: {
         getCategories: async () => {
             const res = await fetch(`${API_URL}/lessons/categories`, { headers: getAuthHeader() });
             if (!res.ok) return [];
 
             const data = await res.json();
-            // Assign colors for the frontend display
             return data.map(cat => ({
                 id: cat.category.toLowerCase(), 
                 name: cat.category, 
@@ -129,7 +118,7 @@ export const api = {
             const data = await res.json();
             return data.map(l => ({
                 ...l,
-                duration: '15 min' // Hardcoded duration for display
+                duration: '15 min'
             }));
         },
         getLessonDetail: async (lessonId) => {
@@ -143,7 +132,7 @@ export const api = {
             return res.json();
         },
         submitQuiz: async (lessonId, answers) => {
-             const res = await fetch(`${API_URL}/quiz/submit`, {
+            const res = await fetch(`${API_URL}/quiz/submit`, {
                 method: 'POST',
                 headers: getAuthHeader(),
                 body: JSON.stringify({ lesson_id: lessonId, answers })
@@ -157,7 +146,7 @@ export const api = {
         }
     },
 
-    // --- WALLET & REWARDS ---
+    // --- WALLET ---
     wallet: {
         getBalance: async () => {
             const res = await fetch(`${API_URL}/wallet/balance`, { headers: getAuthHeader() });
@@ -170,7 +159,6 @@ export const api = {
             if (!res.ok) return [];
             
             const data = await res.json();
-            // Map API data to simple history format
             return data.map(item => ({
                 id: item.id,
                 title: `Completed: ${item.lesson.title}`,
@@ -181,8 +169,9 @@ export const api = {
         }
     },
     
-    // --- ADMIN ENDPOINTS ---
+    // --- ADMIN ---
     admin: {
+
         getUsers: async () => {
             const res = await fetch(`${API_URL}/admin/users`, { headers: getAuthHeader() });
             if (!res.ok) {
@@ -190,6 +179,18 @@ export const api = {
             }
             return res.json();
         },
+
+        // ✅ NEW: REQUIRED BY UserManagement.jsx
+        getAllUsers: async () => {
+            const res = await fetch(`${API_URL}/admin/users`, {
+                headers: getAuthHeader()
+            });
+            if (!res.ok) {
+                await handleFailedResponse(res, 'Fetch All Users');
+            }
+            return res.json();
+        },
+
         promoteUser: async (userId, isAdmin) => {
             const res = await fetch(`${API_URL}/admin/users/${userId}/promote?is_admin=${isAdmin}`, {
                 method: 'PUT',
@@ -200,6 +201,7 @@ export const api = {
             }
             return res.json();
         },
+
         createLesson: async (lessonData) => {
             const res = await fetch(`${API_URL}/admin/lessons`, {
                 method: 'POST',
@@ -212,7 +214,6 @@ export const api = {
             return res.json();
         },
         
-        // 1. Delete Lesson
         deleteLesson: async (lessonId) => {
             const res = await fetch(`${API_URL}/admin/lessons/${lessonId}`, {
                 method: 'DELETE',
@@ -224,12 +225,8 @@ export const api = {
             return {};
         },
 
-        // 2. Upload/Update Quiz (POST to /admin/quiz)
         uploadQuiz: async (lessonId, questions) => {
-            const quizRequest = {
-                lesson_id: lessonId,
-                questions: questions
-            };
+            const quizRequest = { lesson_id: lessonId, questions };
             
             const res = await fetch(`${API_URL}/admin/quiz`, {
                 method: 'POST',
@@ -242,7 +239,6 @@ export const api = {
             return res.json();
         },
 
-        // 3. Delete Quiz (DELETE to /admin/quiz/{lessonId})
         deleteQuiz: async (lessonId) => {
             const res = await fetch(`${API_URL}/admin/quiz/${lessonId}`, {
                 method: 'DELETE',
@@ -252,6 +248,30 @@ export const api = {
                 await handleFailedResponse(res, `Delete Quiz for Lesson ID ${lessonId}`);
             }
             return {};
-        }
+        },
+
+        // ✅ NEW: REQUIRED BY LessonQuizManager.jsx
+        getAllLessons: async () => {
+            const res = await fetch(`${API_URL}/admin/lessons`, {
+                headers: getAuthHeader()
+            });
+            if (!res.ok) {
+                await handleFailedResponse(res, 'Fetch All Lessons');
+            }
+            return res.json();
+        },
+
+        // ✅ NEW: REQUIRED BY QuizCreationForm.jsx
+        createQuiz: async (quizData) => {
+            const res = await fetch(`${API_URL}/admin/quiz`, {
+                method: 'POST',
+                headers: getAuthHeader(),
+                body: JSON.stringify(quizData)
+            });
+            if (!res.ok) {
+                await handleFailedResponse(res, 'Create Quiz');
+            }
+            return res.json();
+        },
     }
 };
