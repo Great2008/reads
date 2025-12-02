@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, Trash2, Edit3, Award, Zap, BookOpen, Clock, XCircle, CheckCircle } from 'lucide-react';
+import { Users, BookOpen, Plus, ShieldOff, Trash2, Video, List, CheckCircle, AlertCircle, Award, Settings, Zap, ArrowLeft, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
 
 // Simple Alert/Toast component for feedback
@@ -12,21 +12,28 @@ const Toast = ({ message, type, onClose }) => {
 
     if (!message) return null;
 
+    useEffect(() => {
+        const timer = setTimeout(onClose, 5000);
+        return () => clearTimeout(timer);
+    }, [message, onClose]);
+
+
     return (
         <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-xl text-white ${color} flex items-center gap-3 z-50`}>
             {type === 'success' && <CheckCircle size={20} />}
-            {type === 'error' && <XCircle size={20} />}
+            {type === 'error' && <AlertCircle size={20} />}
             {message}
             <button onClick={onClose} className="ml-4 font-bold">X</button>
         </div>
     );
 };
 
+
 // ====================================================================
-// --- 1. Quiz Creation Form Component ---
+// --- 1. Quiz Creation / Management Form Component ---
 // ====================================================================
 
-const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
+const QuizCreationForm = ({ lessonId, lessonTitle, onComplete, onToast }) => {
     const initialQuestion = {
         question: '',
         options: ['', '', '', ''],
@@ -35,7 +42,6 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
 
     const [questions, setQuestions] = useState([initialQuestion]);
     const [isLoading, setIsLoading] = useState(false);
-    const [toast, setToast] = useState({ message: '', type: 'info' });
 
     const handleQuestionChange = (index, field, value) => {
         const newQuestions = [...questions];
@@ -59,30 +65,33 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
         }
     };
     
+    // 🟢 NEW FEATURE: Delete Quiz
     const handleDeleteQuiz = async () => {
         if (!lessonId) return;
 
-        if (!window.confirm(`Are you sure you want to delete the existing quiz for "${lessonTitle}"? This cannot be undone.`)) {
+        if (!window.confirm(`Are you sure you want to permanently DELETE the existing quiz for "${lessonTitle}"? This action is irreversible.`)) {
             return;
         }
 
         setIsLoading(true);
         try {
+            // 💥 REAL API CALL
             await api.admin.deleteQuiz(lessonId);
-            setToast({ message: `Quiz for "${lessonTitle}" deleted successfully.`, type: 'success' });
-            onComplete(); // Navigate or refresh
+            onToast(`Quiz for "${lessonTitle}" deleted successfully.`, 'success');
+            onComplete(); 
         } catch (error) {
             console.error("Failed to delete quiz:", error);
-            setToast({ message: 'Failed to delete quiz. Check server logs.', type: 'error' });
+            onToast('Failed to delete quiz. Check network or server status.', 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
+    // 🟢 NEW FEATURE: Upload Quiz
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        setToast({ message: '', type: 'info' });
+        onToast('Uploading Quiz...', 'info');
 
         // Basic validation
         const isValid = questions.every(q => 
@@ -91,29 +100,24 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
 
         if (!isValid) {
             setIsLoading(false);
-            setToast({ message: 'Please complete all fields (question, 4 options, and correct answer) for every question.', type: 'error' });
+            onToast('Please complete all fields (question, 4 options, and correct answer) for every question.', 'error');
             return;
         }
 
         try {
-            // Transform data structure for the API call
-            const quizData = {
-                lesson_id: lessonId,
-                questions: questions.map((q, qIndex) => ({
-                    question: q.question,
-                    options: q.options,
-                    correct_answer: q.correct_answer,
-                }))
-            };
+            const quizQuestions = questions.map((q) => ({
+                question: q.question,
+                options: q.options,
+                correct_answer: q.correct_answer,
+            }));
 
-            await api.admin.uploadQuiz(lessonId, quizData.questions);
-            setToast({ message: `Quiz uploaded successfully for "${lessonTitle}"!`, type: 'success' });
-            setQuestions([initialQuestion]); // Reset form
-            onComplete();
-
+            // 💥 REAL API CALL
+            await api.admin.uploadQuiz(lessonId, quizQuestions);
+            onToast(`Quiz uploaded successfully for "${lessonTitle}"!`, 'success');
+            onComplete(); // Navigate back to the list
         } catch (error) {
             console.error("Quiz upload failed:", error);
-            setToast({ message: 'Failed to upload quiz. Internal server error.', type: 'error' });
+            onToast('Failed to upload quiz. Internal server error.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -123,8 +127,8 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
 
     return (
         <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Manage Quiz: {lessonTitle}</h3>
-            <p className="text-gray-600 dark:text-gray-400">Define the questions, options, and the single correct letter (A, B, C, or D).</p>
+            <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Quiz for: {lessonTitle}</h3>
+            <p className="text-gray-600 dark:text-gray-400">Define the questions, options, and the single correct letter (A, B, C, or D). This will overwrite any existing quiz data.</p>
             
             <button
                 onClick={handleDeleteQuiz}
@@ -151,7 +155,6 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
                         </div>
 
                         <div className="space-y-3">
-                            {/* Question Text */}
                             <input
                                 type="text"
                                 placeholder="Enter question text here..."
@@ -161,7 +164,6 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
                                 required
                             />
 
-                            {/* Options */}
                             <div className="grid grid-cols-2 gap-3 pt-2">
                                 {q.options.map((opt, oIndex) => (
                                     <div key={oIndex} className="flex items-center gap-2">
@@ -178,7 +180,6 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
                                 ))}
                             </div>
 
-                            {/* Correct Answer Selector */}
                             <div className="mt-4 flex items-center gap-3 bg-indigo-50 dark:bg-slate-700 p-3 rounded-lg">
                                 <label className="font-medium text-gray-700 dark:text-gray-300">Correct Answer:</label>
                                 <select
@@ -202,7 +203,7 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
                     onClick={addQuestion}
                     className="w-full py-3 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors flex items-center justify-center gap-2 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600"
                 >
-                    <PlusCircle size={20} /> Add Another Question
+                    <Plus size={20} /> Add Another Question
                 </button>
 
                 <button
@@ -213,63 +214,75 @@ const QuizCreationForm = ({ lessonId, lessonTitle, onComplete }) => {
                     {isLoading ? 'Uploading Quiz...' : <><Zap size={20} /> Upload/Update Quiz</>}
                 </button>
             </form>
-            <Toast {...toast} onClose={() => setToast({ message: '', type: 'info' })} />
         </div>
     );
 };
 
 
 // ====================================================================
-// --- 2. Lesson List View (Simplified for Admin) ---
+// --- 2. Content Management List Component (Handles Lesson Delete) ---
 // ====================================================================
 
-const AdminLessonList = ({ onSelectLesson, onNavigate }) => {
+const LessonQuizManager = ({ onSelectLesson, onToast }) => {
     const [categories, setCategories] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [lessons, setLessons] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    // 1. Fetch Categories
-    useEffect(() => {
-        api.learn.getCategories()
+    const fetchCategories = () => {
+         api.learn.getCategories()
             .then(data => {
                 setCategories(data);
-                if (data.length > 0) {
+                if (data.length > 0 && !selectedCategory) {
                     setSelectedCategory(data[0].name);
                 }
             })
             .catch(e => console.error("Failed to load categories:", e))
-            .finally(() => setIsLoading(false));
+    };
+    
+    // 1. Fetch Categories on mount
+    useEffect(() => {
+        fetchCategories();
     }, []);
 
     // 2. Fetch Lessons based on selectedCategory
-    useEffect(() => {
-        if (selectedCategory) {
-            setIsLoading(true);
-            api.learn.getLessons(selectedCategory)
-                .then(setLessons)
-                .catch(e => {
-                    console.error("Failed to load lessons:", e);
-                    setLessons([]);
-                })
-                .finally(() => setIsLoading(false));
+    const fetchLessons = async (categoryName) => {
+        if (!categoryName) return;
+        setIsLoading(true);
+        try {
+            const data = await api.learn.getLessons(categoryName);
+            setLessons(data);
+        } catch (e) {
+            console.error("Failed to load lessons:", e);
+            setLessons([]);
+        } finally {
+            setIsLoading(false);
         }
+    };
+    
+    useEffect(() => {
+        fetchLessons(selectedCategory);
     }, [selectedCategory]);
     
-    // 3. Admin Delete Handler (needs to be implemented here for list refresh)
+    // 🟢 NEW FEATURE: Lesson Delete Handler
     const handleDeleteLesson = async (lessonId, lessonTitle) => {
         if (!window.confirm(`Are you sure you want to permanently delete the lesson: "${lessonTitle}"? This will also delete the associated quiz.`)) {
             return;
         }
 
         setIsLoading(true);
+        onToast('Deleting lesson...', 'info');
         try {
+            // 💥 REAL API CALL
             await api.admin.deleteLesson(lessonId);
-            // Refresh the lesson list by re-fetching the current category
-            await api.learn.getLessons(selectedCategory).then(setLessons);
+            onToast(`Lesson "${lessonTitle}" deleted successfully.`, 'success');
+            // Refresh the lesson list
+            await fetchLessons(selectedCategory); 
+            // Also refresh categories in case count changed
+            fetchCategories(); 
         } catch (error) {
             console.error("Failed to delete lesson:", error);
-            alert("Failed to delete lesson. Check API permissions or server status.");
+            onToast('Failed to delete lesson. Check API permissions or server status.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -277,13 +290,15 @@ const AdminLessonList = ({ onSelectLesson, onNavigate }) => {
 
 
     if (isLoading && !selectedCategory) {
-        return <div className="p-8 text-center dark:text-white">Loading Categories...</div>;
+        return <p className="p-8 text-center dark:text-white">Loading Categories and Lessons...</p>;
     }
 
     return (
-        <div className="space-y-6">
-            <h2 className="text-3xl font-bold dark:text-white flex items-center gap-2"><Zap size={28} className="text-red-500" /> Admin Lesson Management</h2>
-            <div className="flex flex-wrap gap-2">
+        <div className="space-y-6 animate-fade-in">
+            <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2"><Settings size={24} className="text-indigo-500" /> Content Management</h2>
+            <p className="text-gray-600 dark:text-gray-400">Select a lesson below to delete it or manage its associated quiz questions.</p>
+            
+            <div className="flex flex-wrap gap-2 border-b pb-3 border-gray-200 dark:border-slate-700">
                 {categories.map(cat => (
                     <button
                         key={cat.id}
@@ -305,30 +320,29 @@ const AdminLessonList = ({ onSelectLesson, onNavigate }) => {
                     {isLoading ? (
                          <div className="text-center text-gray-500 dark:text-gray-400">Loading lessons...</div>
                     ) : lessons.length === 0 ? (
-                        <p className="text-center text-gray-500 dark:text-gray-400">No lessons found. Create one?</p>
+                        <p className="text-center text-gray-500 dark:text-gray-400">No lessons found in this category.</p>
                     ) : (
                         lessons.map(lesson => (
                             <div
                                 key={lesson.id}
                                 className="flex items-center justify-between p-3 border border-gray-200 rounded-xl dark:border-slate-700 transition-shadow hover:shadow-md"
                             >
-                                <div className="flex items-center gap-3">
-                                    <BookOpen size={20} className="text-indigo-500" />
-                                    <div className='text-left'>
-                                        <p className="font-medium dark:text-white">{lesson.title}</p>
-                                        <p className="text-xs text-gray-500 flex items-center dark:text-gray-400"><Clock size={12} className="mr-1" /> {lesson.duration || 'N/A'}</p>
-                                    </div>
+                                <div className='text-left'>
+                                    <p className="font-medium dark:text-white">{lesson.title}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">ID: {lesson.id}</p>
                                 </div>
                                 
                                 <div className="flex items-center gap-2">
+                                    {/* Quiz Management Button */}
                                     <button
-                                        onClick={() => onSelectLesson(lesson.id, lesson.title, 'quiz')}
+                                        onClick={() => onSelectLesson(lesson.id, lesson.title, 'quiz_form')}
                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-full dark:hover:bg-blue-900/50 transition-colors"
-                                        title="Manage Quiz"
+                                        title="Manage Quiz Questions"
                                         disabled={isLoading}
                                     >
                                         <Award size={20} />
                                     </button>
+                                    {/* Lesson Delete Button */}
                                     <button
                                         onClick={() => handleDeleteLesson(lesson.id, lesson.title)}
                                         className="p-2 text-red-500 hover:bg-red-50 rounded-full dark:hover:bg-red-900/50 transition-colors"
@@ -348,61 +362,380 @@ const AdminLessonList = ({ onSelectLesson, onNavigate }) => {
 };
 
 
+// --- Component 3: Permission Denied (unchanged) ---
+const PermissionDenied = () => (
+    <div className="text-center p-12 bg-red-50 dark:bg-red-950 rounded-2xl shadow-xl space-y-4 animate-fade-in">
+        <ShieldOff size={48} className="text-red-600 dark:text-red-400 mx-auto" />
+        <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">Access Denied</h2>
+        <p className="text-gray-600 dark:text-gray-400">
+            You do not have administrative privileges to view this panel.
+        </p>
+    </div>
+);
+
+// --- Component 4: User Management (unchanged) ---
+const UserManagement = ({ currentAdminId }) => {
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const fetchUsers = async () => {
+        setIsLoading(true);
+        try {
+            // 💥 REAL API CALL
+            const data = await api.admin.getUsers();
+            setUsers(data);
+            setError(null);
+        } catch (err) {
+            setError("Failed to fetch users.");
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const handlePromotion = async (userToUpdate, isAdmin) => {
+        if (!window.confirm(`Are you sure you want to ${isAdmin ? 'PROMOTE' : 'DEMOTE'} ${userToUpdate.name}?`)) return;
+
+        try {
+            // 💥 REAL API CALL
+            await api.admin.promoteUser(userToUpdate.id, isAdmin);
+            // Update local state immediately
+            setUsers(users.map(u => u.id === userToUpdate.id ? { ...u, is_admin: isAdmin } : u));
+        } catch (error) {
+            alert(`Operation failed: ${error.message}`);
+        }
+    };
+
+    if (isLoading) return <p className="text-center dark:text-white p-8">Loading users from database...</p>;
+    if (error) return <p className="text-center text-red-500 p-8">{error}</p>;
+
+    return (
+        <div className="space-y-4 animate-fade-in">
+            <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold dark:text-white">All System Users ({users.length})</h3>
+                <button onClick={fetchUsers} className="text-sm text-indigo-600 hover:underline">Refresh List</button>
+            </div>
+            
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden border border-gray-100 dark:border-slate-700">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+                    <thead className="bg-gray-50 dark:bg-slate-700">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">User</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Role</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+                        {users.map(user => (
+                            <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${user.is_admin ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'}`}>
+                                        {user.is_admin ? 'Admin' : 'Learner'}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button 
+                                        onClick={() => handlePromotion(user, !user.is_admin)}
+                                        disabled={user.id === currentAdminId} 
+                                        className={`text-xs px-3 py-1 rounded border transition-colors ${
+                                            user.is_admin 
+                                            ? 'border-red-200 text-red-600 hover:bg-red-50' 
+                                            : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50'
+                                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                        {user.is_admin ? 'Demote' : 'Promote'}
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+// --- Component 5: Lesson Creator (unchanged) ---
+const LessonCreator = () => {
+    const [formData, setFormData] = useState({
+        category: 'General', title: '', content: '', video_url: '', order_index: 0
+    });
+    const [status, setStatus] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [categories, setCategories] = useState(['General', 'JAMB', 'WAEC', 'Science', 'Mathematics']);
+
+    // Fetch existing categories to populate the dropdown
+    useEffect(() => {
+        api.learn.getCategories().then(cats => {
+            if (cats && cats.length > 0) {
+                const catNames = cats.map(c => c.name);
+                // Merge default categories with those from DB, remove duplicates
+                setCategories([...new Set([...categories, ...catNames])]);
+            }
+        });
+    }, []);
+
+    const handleChange = (e) => {
+        const { name, value, type } = e.target;
+        setFormData({ 
+            ...formData, 
+            [name]: type === 'number' ? parseInt(value, 10) : value 
+        });
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setStatus('Publishing...');
+        
+        try {
+            // 💥 REAL API CALL
+            await api.admin.createLesson(formData);
+            setStatus('success');
+            // Reset form but keep category
+            setFormData({ ...formData, title: '', content: '', video_url: '', order_index: formData.order_index + 1 });
+            
+            // Clear success message after 3s
+            setTimeout(() => setStatus(''), 3000);
+        } catch (error) {
+            setStatus(`Error: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow border border-gray-100 dark:border-slate-700 animate-fade-in">
+            <h3 className="text-lg font-bold dark:text-white mb-4 flex items-center gap-2">
+                <Plus size={20} className="text-indigo-500"/> Create New Lesson
+            </h3>
+            
+            {status === 'success' && (
+                <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2">
+                    <CheckCircle size={18} /> Lesson published successfully!
+                </div>
+            )}
+            
+            {status.startsWith('Error') && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg flex items-center gap-2">
+                    <AlertCircle size={18} /> {status}
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                        <input
+                            type="text" name="title" required
+                            value={formData.title} onChange={handleChange}
+                            className="w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                            placeholder="e.g. Introduction to Calculus"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                        <div className="flex gap-2">
+                            <select 
+                                name="category" 
+                                value={formData.category} 
+                                onChange={handleChange}
+                                className="flex-1 p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                            >
+                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                         <input
+                            type="text" 
+                            placeholder="Or type new category..."
+                            className="mt-2 w-full p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white text-sm"
+                            onChange={(e) => e.target.value && setFormData({...formData, category: e.target.value})}
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Content (Markdown Supported)</label>
+                    <textarea 
+                        name="content" required
+                        value={formData.content} onChange={handleChange}
+                        className="w-full p-2 h-32 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white font-mono text-sm"
+                        placeholder="# Lesson Header\n\nContent goes here..."
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Video URL (Optional)</label>
+                    <div className="relative">
+                        <Video size={18} className="absolute left-3 top-2.5 text-gray-400" />
+                        <input
+                            type="text" name="video_url"
+                            value={formData.video_url} onChange={handleChange}
+                            className="w-full pl-10 p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                            placeholder="https://youtube.com/..."
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort Order</label>
+                    <input
+                        type="number" name="order_index"
+                        value={formData.order_index} onChange={handleChange}
+                        className="w-24 p-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                    />
+                </div>
+
+                <button 
+                    type="submit" 
+                    disabled={isLoading}
+                    className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                    {isLoading ? 'Publishing...' : 'Publish Lesson'}
+                </button>
+            </form>
+        </div>
+    );
+};
+
+// --- Component 6: Category List (View Only) (unchanged) ---
+const CategoryList = () => {
+    const [categories, setCategories] = useState([]);
+    
+    useEffect(() => {
+        api.learn.getCategories().then(setCategories);
+    }, []);
+
+    return (
+        <div className="space-y-4 animate-fade-in">
+             <h3 className="text-xl font-bold dark:text-white">Existing Categories</h3>
+             <p className="text-sm text-gray-500">
+                Categories are created automatically when you add a lesson with a new category name.
+             </p>
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {categories.map(cat => (
+                    <div key={cat.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl shadow border border-gray-100 dark:border-slate-700 text-center">
+                        <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center font-bold ${cat.color} mb-2`}>
+                            {cat.name[0]}
+                        </div>
+                        <h4 className="font-bold dark:text-white">{cat.name}</h4>
+                        <span className="text-xs text-gray-500">{cat.count} Lessons</span>
+                    </div>
+                ))}
+             </div>
+        </div>
+    );
+}
+
 // ====================================================================
-// --- 3. Main Admin Module ---
+// --- Main Admin Module (Updated for Navigation) ---
 // ====================================================================
 
-export default function AdminModule({ onNavigate }) {
-    const [view, setView] = useState('list'); // 'list', 'create_lesson', 'manage_quiz'
+export default function AdminModule({ user }) {
+    const [activeTab, setActiveTab] = useState('manage'); // Start on content management
+    const [subView, setSubView] = useState('list'); // 'list' or 'quiz_form'
     const [activeLesson, setActiveLesson] = useState(null); // { id, title }
+    const [toast, setToast] = useState({ message: '', type: 'info' });
 
-    const handleSelectLesson = (id, title, targetView) => {
+    // Security Check
+    if (!user || !user.is_admin) {
+        return <PermissionDenied />;
+    }
+    
+    // Helper to show toasts
+    const showToast = (message, type) => setToast({ message, type });
+
+    const handleSelectLesson = (id, title, targetSubView) => {
         setActiveLesson({ id, title });
-        setView(targetView);
+        setSubView(targetSubView);
     };
 
     const handleBackToList = () => {
         setActiveLesson(null);
-        setView('list');
+        setSubView('list');
     };
 
+    const TabButton = ({ name, icon: Icon, label }) => (
+        <button
+            onClick={() => {
+                setActiveTab(name);
+                // Reset sub-view state when changing main tabs
+                setSubView('list'); 
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium border-b-2 ${
+                activeTab === name
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+        >
+            <Icon size={18} />
+            {label}
+        </button>
+    );
+
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-8">
+        <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 animate-fade-in">
             <header className="mb-8">
-                <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">Administrative Panel</h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">Manage all lessons, quizzes, and associated content rewards.</p>
+                <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">Admin Dashboard</h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">Manage all system content and user permissions.</p>
             </header>
 
-            {view !== 'list' && (
-                <button
-                    onClick={handleBackToList}
-                    className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-6 dark:text-indigo-400 dark:hover:text-indigo-300"
-                >
-                    <ArrowLeft size={16} className="mr-1" /> Back to Lesson List
-                </button>
-            )}
-
-            <div className="mt-8">
-                {view === 'list' && (
-                    <AdminLessonList 
-                        onSelectLesson={handleSelectLesson} 
-                        onNavigate={onNavigate} 
-                    />
-                )}
-                
-                {/* 🟢 NEW: Quiz Management View */}
-                {view === 'manage_quiz' && activeLesson && (
-                    <QuizCreationForm 
-                        lessonId={activeLesson.id} 
-                        lessonTitle={activeLesson.title} 
-                        onComplete={handleBackToList} 
-                    />
-                )}
-
-                {/* NOTE: You would typically have a separate component for creating a NEW lesson here */}
-                {/* {view === 'create_lesson' && <LessonCreationForm onComplete={handleBackToList} />} */}
-                
+            {/* Tab Navigation */}
+            <div className="flex gap-2 border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
+                <TabButton name="manage" icon={Settings} label="Manage Content" />
+                <TabButton name="lessons" icon={Plus} label="Add Lesson" />
+                <TabButton name="categories" icon={List} label="Categories" />
+                <TabButton name="users" icon={Users} label="Manage Users" />
             </div>
+
+            {/* Content Area */}
+            <div className="pt-4">
+                {/* 1. Content Management Tab: Handles Lesson Delete & Quiz Upload/Delete */}
+                {activeTab === 'manage' && (
+                    <div className="space-y-6">
+                        {subView === 'quiz_form' && activeLesson ? (
+                            <>
+                                <button
+                                    onClick={handleBackToList}
+                                    className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium dark:text-indigo-400 dark:hover:text-indigo-300"
+                                >
+                                    <ArrowLeft size={16} className="mr-1" /> Back to Lesson List
+                                </button>
+                                <QuizCreationForm 
+                                    lessonId={activeLesson.id} 
+                                    lessonTitle={activeLesson.title} 
+                                    onComplete={handleBackToList} 
+                                    onToast={showToast}
+                                />
+                            </>
+                        ) : (
+                            <LessonQuizManager 
+                                onSelectLesson={handleSelectLesson} 
+                                onToast={showToast}
+                            />
+                        )}
+                    </div>
+                )}
+                
+                {/* 2. Add Lesson Tab */}
+                {activeTab === 'lessons' && <LessonCreator />}
+                
+                {/* 3. Categories Tab */}
+                {activeTab === 'categories' && <CategoryList />}
+                
+                {/* 4. User Management Tab */}
+                {activeTab === 'users' && <UserManagement currentAdminId={user.id} />}
+            </div>
+            <Toast {...toast} onClose={() => setToast({ message: '', type: 'info' })} />
         </div>
     );
 }
