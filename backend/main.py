@@ -38,6 +38,8 @@ app.add_middleware(
 def get_current_admin(current_user: models.User = Depends(auth.get_current_user)):
     """Checks if the authenticated user has admin privileges."""
     if not current_user.is_admin:
+        # Log the failure reason on the server
+        print(f"ADMIN FAIL: User {current_user.id} tried to access admin route.")
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
@@ -288,7 +290,7 @@ def create_lesson(lesson_data: schemas.LessonCreate, db: Session = Depends(datab
     db.refresh(new_lesson)
     return new_lesson
 
-# 💥 CRITICAL FIX: Implement DELETE /admin/lessons/{lesson_id} 💥
+# DELETE /admin/lessons/{lesson_id}
 @app.delete("/admin/lessons/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_lesson(lesson_id: str, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Deletes a lesson and all associated records (Admin Only)."""
@@ -331,26 +333,34 @@ def delete_lesson(lesson_id: str, db: Session = Depends(database.get_db), curren
 @app.post("/admin/quiz")
 def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Creates/Updates the quiz questions for a lesson (Admin Only)."""
+    
+    # Ensure current user is admin (Checked by dependency, but good for logging)
+    if not current_admin.is_admin:
+        # This shouldn't be reached if dependency works, but acts as a safeguard
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
     lesson_id = quiz_request.lesson_id
     
-    # 1. Verify Lesson exists
-    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id).first()
+    # 1. Verify Lesson exists, ensuring the UUID is correctly handled
+    # Convert to string for consistent database query if SQLAlchemy is having issues with the UUID object
+    lesson_id_str = str(lesson_id) 
+    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id_str).first()
+    
     if not lesson:
+        print(f"Quiz Upload Fail: Lesson ID {lesson_id_str} not found.")
         raise HTTPException(status_code=404, detail="Lesson not found for quiz association")
 
     # 2. Delete existing quiz questions for this lesson (to ensure clean update/overwrite)
-    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id).delete(synchronize_session=False)
+    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id_str).delete(synchronize_session=False)
 
     # 3. Insert new questions
     new_questions = []
     for q_data in quiz_request.questions:
         
-        # 💥 FIX APPLIED: Removed the faulty validation logic.
-        # The line 'if q_data.correct_option not in q_data.options:' has been removed,
-        # resolving the 400 error caused by mismatched data formats.
+        # Validation for correct_option removed in previous step, now focusing on insertion.
              
         new_q = models.QuizQuestion(
-            lesson_id=lesson_id,
+            lesson_id=lesson_id, # Can use the UUID object here, SQLAlchemy usually handles it fine on insert
             question=q_data.question,
             options=q_data.options,
             correct_option=q_data.correct_option
@@ -358,12 +368,20 @@ def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(d
         new_questions.append(new_q)
     
     db.add_all(new_questions)
-    db.commit()
     
-    return {"message": f"Successfully added {len(new_questions)} quiz questions for lesson {lesson_id}"}
+    # 4. Attempt commit and handle potential database errors (e.g., integrity errors)
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Database error during quiz upload: {e}")
+        # Raising a 500 allows us to catch database integrity/connection issues
+        raise HTTPException(status_code=500, detail="Database integrity error during quiz save.")
+    
+    return {"message": f"Successfully added {len(new_questions)} quiz questions for lesson {lesson_id_str}"}
 
 
-# 💥 FIX: Implement DELETE /admin/quiz/{lesson_id} 💥
+# DELETE /admin/quiz/{lesson_id}
 @app.delete("/admin/quiz/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_quiz(lesson_id: str, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Deletes all quiz questions associated with a lesson (Admin Only)."""
@@ -378,4 +396,4 @@ def delete_quiz(lesson_id: str, db: Session = Depends(database.get_db), current_
     db.commit()
         
     # Returns 204 No Content due to status_code argument
-    return
+    return 
