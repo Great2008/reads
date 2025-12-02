@@ -43,142 +43,345 @@ def get_current_admin(current_user: models.User = Depends(auth.get_current_user)
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
-# ====================================================================
-# --- 1. ADMIN ROUTES (START) ---
-# ====================================================================
 
-# GET /admin/users
+# ----------------------------------------------------
+# --- 3.1 AUTHENTICATION & PROFILES ---
+# ----------------------------------------------------
+
+@app.post("/auth/signup", response_model=schemas.Token)
+def signup_user(user_data: schemas.UserCreate, db: Session = Depends(database.get_db)):
+    # Check if user already exists
+    if db.query(models.User).filter(models.User.email == user_data.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Hash password and create user
+    # First registered user is automatically made admin for easy setup
+    is_first_user = db.query(models.User).count() == 0
+    
+    hashed_password = auth.get_password_hash(user_data.password)
+    new_user = models.User(
+        name=user_data.name,
+        email=user_data.email,
+        password_hash=hashed_password,
+        is_admin=is_first_user
+    )
+    db.add(new_user)
+    db.flush() # Flush to get the ID for the wallet
+    
+    # Create associated wallet
+    new_wallet = models.Wallet(user_id=new_user.id, token_balance=50) # Starting balance
+    db.add(new_wallet)
+    db.commit()
+    
+    # Create JWT token
+    access_token = auth.create_access_token(
+        data={"sub": str(new_user.id)}
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+# 💥 FIX/DEBUG: Clean login signature and server-side debugging added
+@app.post("/auth/login", response_model=schemas.Token)
+def login_for_access_token(login_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
+    
+    # 1. Find user by email
+    user = db.query(models.User).filter(models.User.email == login_data.email).first()
+    
+    # 2. Check if user exists
+    if not user:
+        print(f"LOGIN FAIL (401): User not found for email: {login_data.email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    # 3. Verify password
+    if not auth.verify_password(login_data.password, user.password_hash):
+        print(f"LOGIN FAIL (401): Password mismatch for user: {login_data.email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 4. Login success
+    print(f"LOGIN SUCCESS: User {login_data.email} logged in.")
+    access_token = auth.create_access_token(
+        data={"sub": str(user.id)}
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.get("/user/profile", response_model=schemas.UserProfile)
+def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
+    return current_user
+
+@app.get("/user/stats", response_model=schemas.UserStats)
+def get_user_stats(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+    lessons_completed = db.query(models.LessonProgress).filter(models.LessonProgress.user_id == current_user.id).count()
+    quizzes_taken = db.query(models.QuizResult).filter(models.QuizResult.user_id == current_user.id).count()
+    
+    return schemas.UserStats(
+        lessons_completed=lessons_completed,
+        quizzes_taken=quizzes_taken
+    )
+
+# ----------------------------------------------------
+# --- 3.2 LEARNING CONTENT ---
+# ----------------------------------------------------
+
+@app.get("/lessons/categories", response_model=List[schemas.CategoryResponse])
+def get_categories(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    results = db.query(
+        models.Lesson.category,
+        func.count(models.Lesson.id).label('count')
+    ).group_by(models.Lesson.category).all()
+
+    return [schemas.CategoryResponse(category=r.category, count=r.count) for r in results]
+
+
+@app.get("/lessons/category/{category_name}", response_model=List[schemas.LessonBase])
+def get_lessons_by_category(category_name: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    lessons = db.query(models.Lesson).filter(models.Lesson.category == category_name).order_by(models.Lesson.order_index).all()
+    return lessons
+
+
+@app.get("/lessons/{lesson_id}", response_model=schemas.LessonDetail)
+def get_lesson_detail(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Fetches a specific lesson by ID."""
+    try:
+        lesson_uuid = UUID(lesson_id)
+    except ValueError as e:
+        print(f"ERROR 400: Invalid Lesson ID format received: '{lesson_id}'. Error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
+        
+    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_uuid).first()
+    if not lesson:
+        print(f"ERROR 404: Lesson not found for ID: {lesson_id}")
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    # Record progress (upsert logic - simple set completed=True)
+    progress = db.query(models.LessonProgress).filter(
+        models.LessonProgress.user_id == current_user.id,
+        models.LessonProgress.lesson_id == lesson_uuid
+    ).first()
+
+    if not progress:
+        progress = models.LessonProgress(
+            user_id=current_user.id,
+            lesson_id=lesson_uuid,
+            completed=True
+        )
+        db.add(progress)
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Warning: Failed to record lesson progress for user {current_user.id} and lesson {lesson_uuid}. Error: {e}")
+    
+    return lesson
+
+
+# ----------------------------------------------------
+# --- 3.3 QUIZ SUBMISSION ---
+# ----------------------------------------------------
+
+@app.get("/lessons/{lesson_id}/quiz", response_model=List[schemas.QuizQuestionResponse])
+def get_quiz_questions(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    try:
+        lesson_uuid = UUID(lesson_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
+
+    questions = db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).all()
+    if not questions:
+        raise HTTPException(status_code=404, detail="Quiz not found for this lesson")
+    
+    return questions
+
+
+@app.post("/quiz/submit", response_model=schemas.QuizResultResponse)
+def submit_quiz(submission: schemas.QuizSubmitRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    lesson_id = submission.lesson_id
+    
+    # Fetch all correct answers for the lesson's quiz
+    quiz_questions = db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id).all()
+    if not quiz_questions:
+        raise HTTPException(status_code=404, detail="Quiz questions not found for this lesson")
+        
+    correct_answers = {str(q.id): q.correct_option for q in quiz_questions}
+    
+    correct_count = 0
+    
+    for answer in submission.answers:
+        if str(answer.question_id) in correct_answers and answer.selected == correct_answers[str(answer.question_id)]:
+            correct_count += 1
+            
+    wrong_count = len(submission.answers) - correct_count
+    total_questions = len(quiz_questions)
+
+    # Scoring and Rewards logic
+    score = int((correct_count / total_questions) * 100) if total_questions > 0 else 0
+    tokens_awarded = 0
+    
+    if score >= 70:
+        tokens_awarded = 100
+        
+        # Award tokens
+        user_wallet = db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
+        if user_wallet:
+            user_wallet.token_balance += tokens_awarded
+        
+        # Record reward history
+        new_reward = models.Reward(
+            user_id=current_user.id,
+            lesson_id=lesson_id,
+            tokens_earned=tokens_awarded
+        )
+        db.add(new_reward)
+
+    # Record Quiz Result
+    new_result = models.QuizResult(
+        user_id=current_user.id,
+        lesson_id=lesson_id,
+        score=score,
+        correct_count=correct_count,
+        wrong_count=wrong_count
+    )
+    db.add(new_result)
+    db.commit()
+
+    return {
+        "score": score,
+        "correct": correct_count,
+        "wrong": wrong_count,
+        "tokens_awarded": tokens_awarded
+    }
+
+# ----------------------------------------------------
+# --- 3.4 Rewards ---
+# ----------------------------------------------------
+
+@app.get("/wallet/balance", response_model=schemas.TokenBalance)
+def get_wallet_balance(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+    """Fetches the token balance for the current user."""
+    # Assuming the user object includes a 'wallet' relationship or loading the wallet
+    wallet = db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
+    if not wallet:
+         raise HTTPException(status_code=404, detail="Wallet not found")
+
+    return {"token_balance": wallet.token_balance}
+
+@app.get("/rewards/history", response_model=List[schemas.RewardHistory])
+def reward_history(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    return db.query(models.Reward).filter(models.Reward.user_id == current_user.id).all()
+
+@app.get("/rewards/summary", response_model=schemas.RewardSummary)
+def reward_summary(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    total = db.query(func.sum(models.Reward.tokens_earned)).filter(models.Reward.user_id == current_user.id).scalar() or 0
+    
+    return schemas.RewardSummary(
+        total_tokens_earned=total,
+        total_quizzes_passed=db.query(models.Reward).filter(models.Reward.user_id == current_user.id).count()
+    )
+
+# ----------------------------------------------------
+# --- 4. ADMIN ENDPOINTS (Requires get_current_admin) ---
+# ----------------------------------------------------
+
 @app.get("/admin/users", response_model=List[schemas.UserProfile])
-def get_all_users(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Returns a list of all users for Admin Management."""
-    users = db.query(models.User).all()
-    return users
+def get_users(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
+    """Fetches all user profiles (Admin Only)."""
+    return db.query(models.User).all()
 
-# PATCH /admin/users/{user_id}/promote
-@app.patch("/admin/users/{user_id}/promote", status_code=status.HTTP_200_OK)
-def promote_or_demote_user(
-    user_id: str, 
-    is_admin: bool, # True to promote, False to demote
-    db: Session = Depends(database.get_db), 
-    current_admin: models.User = Depends(get_current_admin)
-):
-    """Promotes or demotes a user based on the 'is_admin' boolean flag (Admin Only)."""
+@app.put("/admin/users/{user_id}/promote", status_code=status.HTTP_200_OK)
+# Changed to PUT for full resource update of admin status. PATCH is also acceptable.
+def promote_user(user_id: str, is_admin: bool, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
+    """Promotes/Demotes a user by setting is_admin flag (Admin Only)."""
     try:
         user_uuid = UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user ID format")
-    
-    # 1. Check if the admin is trying to modify their own status
+        
+    # Prevent admin from changing their own status
     if user_uuid == current_admin.id:
         raise HTTPException(status_code=400, detail="You cannot change your own admin status.")
-
-    # 2. Find the target user
+        
     user = db.query(models.User).filter(models.User.id == user_uuid).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    # 3. Apply the change only if the status is different
-    if user.is_admin != is_admin:
-        user.is_admin = is_admin
-        db.commit()
-        db.refresh(user)
-    
-    action = "promoted" if is_admin else "demoted"
-    return {"message": f"User {user.name} successfully {action}."}
+    user.is_admin = is_admin
+    db.commit()
+    return {"message": f"User {user.name} admin status set to {is_admin}"}
 
-
-# GET /admin/lessons (Fix for previous 404 error)
+# 💥 RESTORED: This was missing and caused the 'failed to fetch lessons list' error
 @app.get("/admin/lessons", response_model=List[schemas.LessonBase])
 def get_all_lessons(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Returns a list of all lessons for Admin Content Management (Admin Only)."""
     lessons = db.query(models.Lesson).order_by(models.Lesson.category, models.Lesson.order_index).all()
     return lessons
 
-
-# POST /admin/lessons
 @app.post("/admin/lessons", response_model=schemas.LessonDetail, status_code=status.HTTP_201_CREATED)
-def create_lesson(lesson: schemas.LessonCreate, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
+def create_lesson(lesson_data: schemas.LessonCreate, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
     """Creates a new lesson (Admin Only)."""
-    
-    # 1. Create a new Lesson object
-    new_lesson = models.Lesson(
-        category=lesson.category,
-        title=lesson.title,
-        content=lesson.content,
-        video_url=lesson.video_url,
-        order_index=lesson.order_index
-    )
-    
-    # 2. Add and Commit
+    new_lesson = models.Lesson(**lesson_data.model_dump())
     db.add(new_lesson)
-    try:
-        db.commit()
-        db.refresh(new_lesson)
-    except Exception as e:
-        db.rollback()
-        # Log the error
-        print(f"Database error (500) during lesson creation: {e}")
-        raise HTTPException(status_code=500, detail="Database integrity error or duplicate entry.")
-        
+    db.commit()
+    db.refresh(new_lesson)
     return new_lesson
 
 # DELETE /admin/lessons/{lesson_id}
 @app.delete("/admin/lessons/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_lesson(lesson_id: str, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Deletes a lesson and all associated data (Quiz, Progress, Rewards)."""
+    """Deletes a lesson and all associated records (Admin Only)."""
     
     try:
         lesson_uuid = UUID(lesson_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid lesson ID format")
-
-    # 1. Delete associated data first (to avoid foreign key errors)
-    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).delete()
-    db.query(models.LessonProgress).filter(models.LessonProgress.lesson_id == lesson_uuid).delete()
-    db.query(models.Reward).filter(models.Reward.lesson_id == lesson_uuid).delete()
-
-    # 2. Delete the Lesson
-    lesson_query = db.query(models.Lesson).filter(models.Lesson.id == lesson_uuid)
-    lesson = lesson_query.first()
     
+    # 1. Find the lesson
+    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_uuid).first()
     if not lesson:
-        raise HTTPException(status_code=404, detail="Lesson not found")
-
-    lesson_query.delete(synchronize_session=False)
-
-    # 3. Commit
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Database error (500) during lesson deletion: {e}")
-        raise HTTPException(status_code=500, detail="Failed to complete deletion due to a database error.")
-
-    return {}
-
-
-# POST /admin/quiz
-@app.post("/admin/quiz", status_code=status.HTTP_201_CREATED)
-def create_quiz(quiz_data: schemas.QuizCreateRequest, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Creates a new quiz for a lesson (Admin Only)."""
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
+        
+    # 2. Delete ALL dependent records explicitly
+    db.query(models.LessonProgress).filter(models.LessonProgress.lesson_id == lesson_uuid).delete(synchronize_session=False)
+    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).delete(synchronize_session=False)
+    db.query(models.QuizResult).filter(models.QuizResult.lesson_id == lesson_uuid).delete(synchronize_session=False)
+    db.query(models.Reward).filter(models.Reward.lesson_id == lesson_uuid).delete(synchronize_session=False)
     
-    lesson_id = quiz_data.lesson_id
+    # 3. Delete the main Lesson
+    db.delete(lesson)
+    
+    # 4. Commit all deletions
+    db.commit()
+    
+    return 
+
+
+@app.post("/admin/quiz", status_code=status.HTTP_201_CREATED)
+def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
+    """Creates/Updates the quiz questions for a lesson (Admin Only)."""
+    
+    lesson_id = quiz_request.lesson_id
     lesson_id_str = str(lesson_id)
     
-    # 1. Validate Lesson exists
+    # 1. Verify Lesson exists
     lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id).first()
+    
     if not lesson:
-        raise HTTPException(status_code=404, detail=f"Lesson with ID {lesson_id_str} not found.")
+        print(f"Quiz Upload Fail (404): Lesson ID {lesson_id_str} not found.")
+        raise HTTPException(status_code=404, detail="Lesson not found for quiz association")
 
-    # 2. OPTIONAL: Delete any existing quiz questions for this lesson before adding new ones
-    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id).delete()
+    # 2. Delete existing quiz questions for this lesson (to ensure clean update/overwrite)
+    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id).delete(synchronize_session=False)
 
-    # 3. Prepare new questions for insertion
+    # 3. Insert new questions
     new_questions = []
-    for q_data in quiz_data.questions:
-        # Validate correct option letter (A, B, C, D)
-        if q_data.correct_option not in ["A", "B", "C", "D"]:
-             raise HTTPException(status_code=400, detail=f"Invalid correct option letter '{q_data.correct_option}' in quiz question.")
+    for q_data in quiz_request.questions:
              
         new_q = models.QuizQuestion(
             lesson_id=lesson_id, 
@@ -196,7 +399,6 @@ def create_quiz(quiz_data: schemas.QuizCreateRequest, db: Session = Depends(data
     except Exception as e:
         db.rollback()
         print(f"Database error (500) during quiz upload: {e}")
-        # Raising a 500 allows us to catch database integrity/connection issues
         raise HTTPException(status_code=500, detail="Database integrity error during quiz save.")
     
     return {"message": f"Successfully added {len(new_questions)} quiz questions for lesson {lesson_id_str}"}
@@ -213,317 +415,7 @@ def delete_quiz(lesson_id: str, db: Session = Depends(database.get_db), current_
         raise HTTPException(status_code=400, detail="Invalid lesson ID format")
         
     # Delete Quiz Questions
-    delete_count = db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).delete(synchronize_session=False)
-    
-    if delete_count == 0:
-        raise HTTPException(status_code=404, detail="No quiz found for this lesson ID.")
-
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Database error (500) during quiz deletion: {e}")
-        raise HTTPException(status_code=500, detail="Failed to complete quiz deletion due to a database error.")
-        
-    return {}
-
-# ====================================================================
-# --- 1. ADMIN ROUTES (END) ---
-# ====================================================================
-
-# ... (Rest of the Auth and Learning Routes would follow here)
-# ... (Adding a simple root route for health check)
-
-@app.get("/")
-def read_root():
-    return {"message": "$READS Backend MVP is running"}
-
-# --- AUTH ROUTES ---
-
-# POST /auth/signup
-@app.post("/auth/signup", response_model=schemas.Token)
-def signup(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    # 1. Check if user exists
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    # 2. Hash password and create user
-    hashed_password = auth.get_password_hash(user.password)
-    new_user = models.User(
-        name=user.name, 
-        email=user.email, 
-        password_hash=hashed_password,
-        # First registered user is automatically made admin for easy setup
-        is_admin=db.query(models.User).count() == 0 
-    )
-    
-    db.add(new_user)
+    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).delete(synchronize_session=False)
     db.commit()
-    db.refresh(new_user)
-    
-    # 3. Initialize Wallet
-    new_wallet = models.Wallet(user_id=new_user.id, token_balance=0)
-    db.add(new_wallet)
-    db.commit()
-
-    # 4. Create and return token
-    access_token = auth.create_access_token(data={"sub": str(new_user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-# 💥 FIX/DEBUG: Added print statements to pinpoint 401 login failure
-# POST /auth/login
-@app.post("/auth/login", response_model=schemas.Token)
-def login_for_access_token(form_data: auth.OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-    
-    # 1. Authenticate the user
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    
-    if not user:
-        # User not found (Incorrect username/email)
-        print(f"LOGIN FAIL: User not found for email: {form_data.username}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    if not auth.verify_password(form_data.password, user.password_hash):
-        # Password mismatch (Incorrect password)
-        print(f"LOGIN FAIL: Password mismatch for user: {form_data.username}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Login successful
-    print(f"LOGIN SUCCESS: User {user.email} logged in.")
-    # 2. Create token and return
-    access_token = auth.create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-# --- PROFILE ROUTES ---
-
-# GET /profile
-@app.get("/profile", response_model=schemas.UserProfile)
-def read_profile(current_user: models.User = Depends(auth.get_current_user)):
-    """Returns the authenticated user's profile information."""
-    return current_user
-
-# GET /profile/stats
-@app.get("/profile/stats", response_model=schemas.UserStats)
-def get_user_stats(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns aggregated stats for the current user."""
-    
-    # Count unique lessons with progress (simplified)
-    lessons_completed_count = db.query(models.LessonProgress.lesson_id)\
-        .filter(models.LessonProgress.user_id == current_user.id)\
-        .group_by(models.LessonProgress.lesson_id)\
-        .count()
         
-    # Count quizzes taken
-    quizzes_taken_count = db.query(models.QuizResult.id)\
-        .filter(models.QuizResult.user_id == current_user.id)\
-        .count()
-        
-    return schemas.UserStats(
-        lessons_completed=lessons_completed_count,
-        quizzes_taken=quizzes_taken_count
-    )
-
-# --- WALLET/REWARD ROUTES ---
-
-# GET /wallet/balance
-@app.get("/wallet/balance", response_model=schemas.TokenBalance)
-def get_wallet_balance(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns the current token balance for the authenticated user."""
-    wallet = db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
-    if not wallet:
-        # This shouldn't happen if wallet is created on signup
-        raise HTTPException(status_code=404, detail="Wallet not found")
-        
-    return schemas.TokenBalance(token_balance=wallet.token_balance)
-
-# GET /wallet/history (Simplified to rewards for now)
-@app.get("/wallet/history", response_model=List[schemas.RewardResponse])
-def get_wallet_history(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns the recent reward history for the authenticated user."""
-    # Joining Reward with Lesson to get the lesson title
-    rewards_history = db.query(models.Reward, models.Lesson)\
-        .join(models.Lesson, models.Reward.lesson_id == models.Lesson.id)\
-        .filter(models.Reward.user_id == current_user.id)\
-        .order_by(desc(models.Reward.created_at))\
-        .limit(10)\
-        .all()
-        
-    # Format the output to match the RewardResponse schema
-    return [
-        schemas.RewardResponse(
-            id=str(reward.id),
-            lesson_title=lesson.title,
-            tokens_earned=reward.tokens_earned,
-            created_at=reward.created_at,
-            type="Reward" # Hardcoded type for simple list
-        )
-        for reward, lesson in rewards_history
-    ]
-
-
-# --- LEARNING ROUTES (Lessons, Quizzes, Progress) ---
-
-# GET /learn/categories
-@app.get("/learn/categories", response_model=List[schemas.CategoryResponse])
-def get_lesson_categories(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns a list of all lesson categories and the count of lessons in each."""
-    
-    category_counts = db.query(
-        models.Lesson.category, 
-        func.count(models.Lesson.id)
-    ).group_by(models.Lesson.category).all()
-    
-    return [schemas.CategoryResponse(category=cat, count=count) for cat, count in category_counts]
-
-
-# GET /learn/lessons/{category}
-@app.get("/learn/lessons/{category}", response_model=List[schemas.LessonBase])
-def get_lessons_by_category(category: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns a list of lessons within a specific category."""
-    
-    lessons = db.query(models.Lesson)\
-        .filter(models.Lesson.category == category)\
-        .order_by(models.Lesson.order_index)\
-        .all()
-        
-    if not lessons:
-        # Return an empty list if no lessons are found, instead of 404
-        return []
-
-    # LessonBase schema handles the fields
-    return lessons
-
-
-# GET /learn/lesson/{lesson_id}
-@app.get("/learn/lesson/{lesson_id}", response_model=schemas.LessonDetail)
-def get_lesson_detail(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns the detail content for a single lesson."""
-    
-    try:
-        lesson_uuid = UUID(lesson_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
-        
-    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_uuid).first()
-    
-    if not lesson:
-        raise HTTPException(status_code=404, detail="Lesson not found")
-
-    return lesson
-
-
-# GET /learn/quiz/{lesson_id}
-@app.get("/learn/quiz/{lesson_id}", response_model=List[schemas.QuizQuestionResponse])
-def get_quiz_by_lesson(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns the quiz questions for a lesson."""
-    
-    try:
-        lesson_uuid = UUID(lesson_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
-        
-    questions = db.query(models.QuizQuestion)\
-        .filter(models.QuizQuestion.lesson_id == lesson_uuid)\
-        .order_by(models.QuizQuestion.created_at)\
-        .all()
-        
-    if not questions:
-        raise HTTPException(status_code=404, detail="Quiz questions not found for this lesson.")
-
-    # Note: QuizQuestionResponse schema excludes the correct_option
-    return questions
-
-
-# POST /learn/quiz/submit
-@app.post("/learn/quiz/submit", response_model=schemas.QuizResultResponse)
-def submit_quiz_answers(submission: schemas.QuizSubmitRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Processes submitted quiz answers, saves results, and awards tokens."""
-    
-    lesson_id = submission.lesson_id
-    user_id = current_user.id
-    
-    # 1. Fetch all correct answers for the quiz questions
-    question_ids = [ans.question_id for ans in submission.answers]
-    correct_answers_map = db.query(models.QuizQuestion.id, models.QuizQuestion.correct_option)\
-        .filter(models.QuizQuestion.id.in_(question_ids))\
-        .all()
-    correct_answers = {q_id: correct_opt for q_id, correct_opt in correct_answers_map}
-    
-    if not correct_answers:
-        raise HTTPException(status_code=404, detail="No valid questions found for grading.")
-
-    # 2. Grade the quiz
-    total_questions = len(question_ids)
-    correct_count = 0
-    
-    for answer in submission.answers:
-        if str(answer.question_id) in [str(id) for id in correct_answers.keys()]:
-            if answer.selected == correct_answers[answer.question_id]:
-                correct_count += 1
-                
-    wrong_count = total_questions - correct_count
-    score = int((correct_count / total_questions) * 100) if total_questions > 0 else 0
-    
-    # 3. Save Quiz Result
-    new_result = models.QuizResult(
-        user_id=user_id,
-        lesson_id=lesson_id,
-        score=score,
-        correct_count=correct_count,
-        wrong_count=wrong_count
-    )
-    db.add(new_result)
-    
-    # 4. Award Tokens based on success criteria (e.g., passing score > 70)
-    tokens_earned = 0
-    if score >= 70:
-        tokens_earned = 20 # Example reward value
-        
-        # Save Reward
-        new_reward = models.Reward(
-            user_id=user_id,
-            lesson_id=lesson_id,
-            tokens_earned=tokens_earned
-        )
-        db.add(new_reward)
-        
-        # Update Wallet
-        wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user_id).first()
-        if wallet:
-            wallet.token_balance += tokens_earned
-        
-        # Save Lesson Progress (Mark as completed)
-        # Check if progress already exists for this lesson
-        progress = db.query(models.LessonProgress)\
-            .filter(models.LessonProgress.user_id == user_id, models.LessonProgress.lesson_id == lesson_id)\
-            .first()
-        
-        if not progress:
-            new_progress = models.LessonProgress(user_id=user_id, lesson_id=lesson_id)
-            db.add(new_progress)
-            
-    # 5. Commit all changes
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Database error (500) during quiz submission save: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save quiz results and rewards.")
-        
-    # 6. Return response
-    return schemas.QuizResultResponse(
-        score=score,
-        correct=correct_count,
-        wrong=wrong_count,
-        tokens_earned=tokens_earned,
-        message=f"Quiz submitted. Score: {score}%. {'Tokens awarded!' if tokens_earned > 0 else 'Keep practicing!'}"
-    )
+    return
