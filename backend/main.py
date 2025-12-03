@@ -80,7 +80,6 @@ def signup_user(user_data: schemas.UserCreate, db: Session = Depends(database.ge
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# 🧹 CLEANUP: Removed temporary debug logs
 @app.post("/auth/login", response_model=schemas.Token)
 def login_for_access_token(login_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
     
@@ -138,7 +137,7 @@ def get_lessons_by_category(category_name: str, db: Session = Depends(database.g
 
 @app.get("/lessons/{lesson_id}", response_model=schemas.LessonDetail)
 def get_lesson_detail(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Fetches a specific lesson by ID."""
+    """Fetches a specific lesson by ID and records progress."""
     try:
         lesson_uuid = UUID(lesson_id)
     except ValueError as e:
@@ -178,10 +177,23 @@ def get_lesson_detail(lesson_id: str, db: Session = Depends(database.get_db), cu
 
 @app.get("/lessons/{lesson_id}/quiz", response_model=List[schemas.QuizQuestionResponse])
 def get_quiz_questions(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """
+    Retrieves quiz questions for a lesson, but first checks if the user has already completed the quiz.
+    """
     try:
         lesson_uuid = UUID(lesson_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid lesson ID format")
+
+    # 🚀 NEW LOGIC: Prevent re-taking a completed quiz
+    existing_result = db.query(models.QuizResult).filter(
+        models.QuizResult.user_id == current_user.id,
+        models.QuizResult.lesson_id == lesson_uuid
+    ).first()
+    
+    if existing_result:
+        raise HTTPException(status_code=409, detail="Quiz already completed for this lesson.")
+    # --- END NEW LOGIC ---
 
     questions = db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).all()
     if not questions:
@@ -193,6 +205,16 @@ def get_quiz_questions(lesson_id: str, db: Session = Depends(database.get_db), c
 @app.post("/quiz/submit", response_model=schemas.QuizResultResponse)
 def submit_quiz(submission: schemas.QuizSubmitRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     lesson_id = submission.lesson_id
+    
+    # 🚀 NEW LOGIC: Prevent re-submitting a completed quiz
+    existing_result = db.query(models.QuizResult).filter(
+        models.QuizResult.user_id == current_user.id,
+        models.QuizResult.lesson_id == lesson_id
+    ).first()
+    
+    if existing_result:
+        raise HTTPException(status_code=409, detail="Quiz already completed for this lesson.")
+    # --- END NEW LOGIC ---
     
     # Fetch all correct answers for the lesson's quiz
     quiz_questions = db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id).all()
@@ -262,7 +284,6 @@ def get_wallet_balance(current_user: models.User = Depends(auth.get_current_user
 
     return {"token_balance": wallet.token_balance}
 
-# 🚀 FIX: Corrected endpoint from /rewards/history to /wallet/history and updated data structure
 @app.get("/wallet/history", response_model=List[schemas.RewardHistory])
 def get_wallet_history(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     """Returns the recent reward history for the authenticated user, including lesson title."""
