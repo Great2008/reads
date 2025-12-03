@@ -19,7 +19,7 @@ const CompletedState = ({ lessonTitle, onNavigate }) => (
             You have already successfully completed the quiz for **{lessonTitle}** and earned your reward.
         </p>
         <button 
-            onClick={() => onNavigate('learn', 'list', { name: 'all' })}
+            onClick={() => onNavigate('learn', 'categories')}
             className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold"
         >
             Explore More Lessons
@@ -29,7 +29,6 @@ const CompletedState = ({ lessonTitle, onNavigate }) => (
 
 const ResultSummary = ({ result, lessonTitle, onNavigate }) => {
     const passed = result.score >= 70;
-    const badgeColor = passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
     const Icon = passed ? Award : XCircle;
 
     return (
@@ -47,7 +46,7 @@ const ResultSummary = ({ result, lessonTitle, onNavigate }) => {
             </div>
 
             <button 
-                onClick={() => onNavigate('learn', 'list', { name: 'all' })}
+                onClick={() => onNavigate('learn', 'categories')}
                 className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold"
             >
                 Continue Learning
@@ -75,22 +74,26 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
     const [answers, setAnswers] = useState({}); // { questionId: 'A', questionId2: 'C' }
     const [submissionResult, setSubmissionResult] = useState(null);
     const [status, setStatus] = useState('loading'); // 'loading', 'questions', 'completed', 'results', 'error'
+    const [errorMessage, setErrorMessage] = useState(''); // 🚀 NEW: State to hold specific error message
 
     useEffect(() => {
         const fetchQuiz = async () => {
+            setStatus('loading');
+            setErrorMessage('');
             try {
                 const data = await api.learn.getQuizQuestions(lessonId);
                 setQuestions(data);
                 setStatus('questions');
             } catch (err) {
-                console.error("Quiz fetch error:", err.message);
+                const message = err.message || 'An unknown API error occurred.';
+                console.error("Quiz fetch error:", message);
                 
-                // CRITICAL FIX: Check for the backend's "already completed" error detail
-                if (err.message && err.message.includes("Quiz already completed")) {
+                // 🚀 FIXED LOGIC: Check for the backend's "already completed" error detail
+                if (message.includes("Quiz already completed")) {
                     setStatus('completed');
                 } else {
+                    setErrorMessage(message); // Capture the actual error message
                     setStatus('error');
-                    // Optionally set a detailed error message
                 }
             }
         };
@@ -110,6 +113,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
 
     const handleSubmit = async () => {
         setStatus('loading');
+        setErrorMessage('');
         
         const submissionBody = {
             lesson_id: lessonId,
@@ -124,7 +128,6 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
             
             // Update wallet balance if tokens were awarded
             if (result.tokens_awarded > 0) {
-                // Assuming onUpdateWallet handles fetching the new balance
                 onUpdateWallet(result.tokens_awarded); 
             }
 
@@ -132,7 +135,9 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
             setStatus('results');
 
         } catch (err) {
-            console.error("Quiz submission failed:", err);
+            const message = err.message || 'An unknown API error occurred during submission.';
+            console.error("Quiz submission failed:", message);
+            setErrorMessage(message); 
             setStatus('error'); // Re-set status to error on submission fail
         }
     };
@@ -144,7 +149,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
     }
 
     if (status === 'completed') {
-        // This handles the new backend logic gracefully
+        // This handles the correct 409 response gracefully
         return <CompletedState lessonTitle={lessonTitle} onNavigate={onNavigate} />;
     }
     
@@ -153,14 +158,25 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
     }
 
     if (status === 'error') {
-        return <div className="p-8 text-center text-red-500 dark:text-red-400">
-            <XCircle size={24} className="mx-auto mb-3" />
-            <p className='font-bold'>Error Loading Quiz</p>
-            <p className='text-sm text-gray-500 dark:text-gray-400'>Please try again or check the console for details.</p>
-            <button onClick={() => setStatus('loading')} className="mt-4 text-indigo-600 hover:underline">
-                <RefreshCw size={16} className="inline mr-1" /> Retry
-            </button>
-        </div>
+        return (
+            <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-xl shadow-lg border-l-4 border-red-500">
+                <XCircle size={24} className="mx-auto mb-3 text-red-500" />
+                <p className='font-bold text-red-600 dark:text-red-400'>Quiz Load Error</p>
+                {/* 🚀 Now displays the exact API error message */}
+                <p className='text-sm text-gray-500 dark:text-gray-400 mt-2'>{errorMessage}</p>
+                <button 
+                    onClick={() => { setStatus('loading'); setErrorMessage(''); }} 
+                    className="mt-4 text-indigo-600 hover:underline"
+                >
+                    <RefreshCw size={16} className="inline mr-1" /> Retry
+                </button>
+                <div className='mt-4'>
+                    <button onClick={() => onNavigate('learn', 'detail', lessonId)} className="flex items-center mx-auto text-sm text-gray-500 hover:text-indigo-600">
+                         <ArrowLeft size={16} className="mr-1" /> Back to Lesson
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     // Default view: Display Questions
