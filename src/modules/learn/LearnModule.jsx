@@ -1,4 +1,4 @@
-Import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 // IMPORTANT: Added XCircle and RefreshCw to imports for the error/loading states
 import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle, Trash2, XCircle, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
