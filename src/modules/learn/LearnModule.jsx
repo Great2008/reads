@@ -1,6 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle, Trash2 } from 'lucide-react';
+// IMPORTANT: Added XCircle and RefreshCw to imports for the error/loading states
+import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle, Trash2, XCircle, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
+
+// ====================================================================
+// --- 0. Helper Components for QuizView (NEWLY ADDED) ---
+// ====================================================================
+
+const LoadingState = ({ message = "Loading..." }) => (
+    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        <RefreshCw size={24} className="mx-auto mb-3 animate-spin text-indigo-500" />
+        <p>{message}</p>
+    </div>
+);
+
+// This component handles the specific 'Quiz already completed' error
+const CompletedState = ({ lessonTitle, onNavigate }) => (
+    <div className="space-y-6 animate-fade-in p-8 bg-green-50 dark:bg-slate-800 rounded-2xl shadow-lg border-l-4 border-green-500">
+        <CheckCircle size={48} className="text-green-600 mx-auto" />
+        <h3 className="text-2xl font-bold text-center dark:text-white">Quiz Completed!</h3>
+        <p className="text-center text-gray-600 dark:text-gray-400">
+            You have already successfully completed the quiz for **{lessonTitle}** and earned your reward.
+        </p>
+        <button 
+            onClick={() => onNavigate('learn', 'categories')}
+            className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold"
+        >
+            Explore More Lessons
+        </button>
+    </div>
+);
+
 
 // ====================================================================
 // --- 1. Lesson Detail View Component (Full Data Expected) ---
@@ -62,7 +92,7 @@ const LessonDetailView = ({ lesson, onNavigate }) => {
 };
 
 // ====================================================================
-// --- 2. Quiz View Component ---
+// --- 2. Quiz View Component (FIXED ERROR HANDLING) ---
 // ====================================================================
 
 const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { 
@@ -74,7 +104,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
     const [answers, setAnswers] = useState({}); 
     const [quizResult, setQuizResult] = useState(null); 
     const [isLoading, setIsLoading] = useState(false);
-    // 🟢 NEW: State to track if quiz loading failed due to 500/404
+    // 🟢 NEW: State to track if quiz loading failed due to 500/404 OR 409
     const [loadError, setLoadError] = useState(null); 
 
     useEffect(() => {
@@ -90,9 +120,17 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                     }
                 })
                 .catch(e => {
-                    console.error("Failed to load quiz questions:", e);
-                    // 🟢 IMPROVED: Set specific error message for the user
-                    setLoadError("Failed to load quiz. The server may be unavailable (Error 500)."); 
+                    const errorMessage = e.message || "An unknown error occurred.";
+                    console.error("Failed to load quiz questions:", errorMessage);
+                    
+                    // 💥 CRITICAL FIX: Check for the backend's specific anti-cheating message
+                    if (errorMessage.includes("Quiz already completed")) {
+                        // Use a dedicated status (null loadError) to trigger the CompletedState component
+                        setLoadError("COMPLETED"); 
+                    } else {
+                        // 🟢 Display the actual error message for debugging
+                        setLoadError(`Quiz Load Error: ${errorMessage}`); 
+                    }
                 });
         }
     }, [lessonId]);
@@ -128,13 +166,17 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                 onUpdateWallet(result.tokens_awarded); 
             } catch (e) {
                 console.error("Quiz submission failed:", e);
-                // Use a temporary state message instead of alert()
-                setLoadError("Submission failed. Please check your connection and try again.");
+                setLoadError(`Submission failed. Please check your connection. Error: ${e.message || 'Unknown'}`);
                 setIsLoading(false);
             } 
         }
     };
     
+    // 💥 NEW: Render the Completed State when the specific error is caught
+    if (loadError === "COMPLETED") {
+        return <CompletedState lessonTitle={lessonTitle} onNavigate={onNavigate} />;
+    }
+
     if (loadError) {
         return (
             <div className="text-center p-8 bg-red-50 border border-red-200 rounded-xl shadow-lg dark:bg-red-900/20 dark:border-red-800 animate-fade-in">
@@ -144,27 +186,26 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                     onClick={() => onNavigate('learn', 'detail', lessonId)} 
                     className="mt-4 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150"
                 >
-                    Back to Lesson
+                    <ArrowLeft size={16} className="inline mr-1" /> Back to Lesson
                 </button>
             </div>
         );
     }
 
-    if (isLoading) {
-        return <div className="p-8 text-center dark:text-white">Submitting Quiz and Calculating Rewards...</div>;
-    }
-
-    if (!questions.length && !quizResult) {
-        return <div className="p-8 text-center dark:text-white">Loading quiz questions for "{lessonTitle}"...</div>;
+    if (isLoading || (!questions.length && !quizResult)) {
+        return <LoadingState message={isLoading ? "Submitting Quiz and Calculating Rewards..." : `Loading quiz questions for "${lessonTitle}"...`} />;
     }
     
     // Quiz Result View (Remains unchanged)
     if (quizResult) {
         const { score, correct, wrong, tokens_awarded } = quizResult;
+        const resultText = score >= 70 ? "Congratulations!" : "Quiz Failed";
+
         return (
             <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-xl space-y-6 animate-fade-in border border-gray-100 dark:border-slate-700">
-                <CheckCircle size={60} className="text-green-500 mx-auto" />
-                <h2 className="text-3xl font-bold dark:text-white">Quiz Completed!</h2>
+                <CheckCircle size={60} className={`${score >= 70 ? 'text-green-500' : 'text-red-500'} mx-auto`} />
+                <h2 className="text-3xl font-bold dark:text-white">{resultText}</h2>
+                <p className='text-gray-500 dark:text-gray-400'>You scored {score}% for the **{lessonTitle}** quiz.</p>
                 
                 <div className="grid grid-cols-3 gap-4 text-left">
                     <div className="p-3 rounded-xl bg-indigo-50 dark:bg-slate-700">
@@ -470,4 +511,3 @@ export default function LearnModule({ subView, activeData, onNavigate, onUpdateW
         </div>
     );
 }
-
