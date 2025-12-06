@@ -3,21 +3,28 @@ import { v4 as uuidv4 } from 'uuid';
 // Vercel routes our /api path to the Python backend function
 const API_URL = "/api"; 
 
+// FIX: Implement the getAuthHeader function
 const getAuthHeader = () => {
     const token = localStorage.getItem('access_token');
-    const headers = { 'Content-Type': 'application/json' };
-    
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+    if (!token) {
+        // If no token, return headers that will fail authentication on the backend
+        return { 'Content-Type': 'application/json' };
     }
-    
-    return headers;
+    return { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
 // Helper function to process failed responses aggressively
 const handleFailedResponse = async (res, action) => {
     let errorDetail = `Failed to ${action} (Status: ${res.status})`;
     
+    // 💥 CRITICAL FIX FOR 409: Throw a specific error for the frontend component to handle.
+    if (res.status === 409) {
+        throw new Error('QuizAlreadyCompleted');
+    }
+
     try {
         const data = await res.json();
         errorDetail = data.detail || errorDetail;
@@ -67,6 +74,7 @@ export const api = {
             const token = localStorage.getItem('access_token');
             if (!token) return null;
             
+            // FIX: Use getAuthHeader to ensure consistency
             const res = await fetch(`${API_URL}/user/profile`, { headers: getAuthHeader() });
             
             if (!res.ok) {
@@ -90,7 +98,16 @@ export const api = {
     profile: {
         getStats: async () => {
             const res = await fetch(`${API_URL}/user/stats`, { headers: getAuthHeader() });
-            if (!res.ok) return { lessons_completed: 0, quizzes_taken: 0 };
+            // FIX: Use handleFailedResponse for proper error handling on not res.ok
+            if (!res.ok) {
+                // If it fails, log the error but return default data
+                try {
+                    await handleFailedResponse(res, 'Fetch User Stats');
+                } catch (e) {
+                    console.error("Non-fatal error fetching user stats:", e.message);
+                }
+                return { lessons_completed: 0, quizzes_taken: 0 };
+            }
 
             const data = await res.json();
             return data;
@@ -101,7 +118,15 @@ export const api = {
     learn: {
         getCategories: async () => {
             const res = await fetch(`${API_URL}/lessons/categories`, { headers: getAuthHeader() });
-            if (!res.ok) return [];
+            // FIX: Use handleFailedResponse for proper error handling
+            if (!res.ok) {
+                try {
+                    await handleFailedResponse(res, 'Fetch Categories');
+                } catch (e) {
+                    console.error("Non-fatal error fetching categories:", e.message);
+                }
+                return [];
+            }
 
             const data = await res.json();
             return data.map(cat => ({
@@ -113,7 +138,15 @@ export const api = {
         },
         getLessons: async (categoryName) => {
             const res = await fetch(`${API_URL}/lessons/category/${categoryName}`, { headers: getAuthHeader() });
-            if (!res.ok) return [];
+            // FIX: Use handleFailedResponse for proper error handling
+            if (!res.ok) {
+                try {
+                    await handleFailedResponse(res, 'Fetch Lessons');
+                } catch (e) {
+                    console.error("Non-fatal error fetching lessons:", e.message);
+                }
+                return [];
+            }
             
             const data = await res.json();
             return data.map(l => ({
@@ -123,12 +156,23 @@ export const api = {
         },
         getLessonDetail: async (lessonId) => {
             const res = await fetch(`${API_URL}/lessons/${lessonId}`, { headers: getAuthHeader() });
-            if (!res.ok) return null;
+            // FIX: Use handleFailedResponse for proper error handling
+            if (!res.ok) {
+                await handleFailedResponse(res, 'Fetch Lesson Detail');
+            }
             return res.json();
         },
         getQuizQuestions: async (lessonId) => {
             const res = await fetch(`${API_URL}/lessons/${lessonId}/quiz`, { headers: getAuthHeader() });
-            if (!res.ok) return [];
+            
+            // 💥 THE CRITICAL FIX: Use the aggressive handler to catch 409
+            if (!res.ok) {
+                // handleFailedResponse now throws 'QuizAlreadyCompleted' for 409, 
+                // or a generic error for others (404, 500 etc.)
+                await handleFailedResponse(res, 'Fetch Quiz Questions'); 
+            }
+            
+            // If res.ok (status 200), return the data
             return res.json();
         },
         submitQuiz: async (lessonId, answers) => {
@@ -150,21 +194,32 @@ export const api = {
     wallet: {
         getBalance: async () => {
             const res = await fetch(`${API_URL}/wallet/balance`, { headers: getAuthHeader() });
-            if (!res.ok) return 0;
+            // FIX: Use handleFailedResponse for proper error handling
+            if (!res.ok) {
+                try {
+                    await handleFailedResponse(res, 'Fetch Wallet Balance');
+                } catch (e) {
+                    console.error("Non-fatal error fetching balance:", e.message);
+                }
+                return 0;
+            }
             const data = await res.json();
             return data.token_balance;
         },
-        // 🚀 FIX: Corrected API route and removed incorrect data re-mapping
         getHistory: async () => {
             // 1. Correct route to match the backend change
             const res = await fetch(`${API_URL}/wallet/history`, { headers: getAuthHeader() });
             if (!res.ok) {
-                console.error("Failed to fetch wallet history.");
+                // FIX: Use handleFailedResponse for proper error handling
+                try {
+                    await handleFailedResponse(res, 'Fetch Wallet History');
+                } catch (e) {
+                    console.error("Non-fatal error fetching wallet history:", e.message);
+                }
                 return [];
             }
             
             const data = await res.json();
-            // 2. Return data directly. WalletModule.jsx is now updated to expect lesson_title, tokens_earned, etc.
             return data;
         }
     },
