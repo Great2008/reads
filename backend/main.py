@@ -28,7 +28,7 @@ print("FastAPI app initialized with root_path=/api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[""], # NOTE: Changed to "*" for initial testing, please set this to your frontend domain in production!
+    allow_origins=["reads-phi.vercel.app"], # NOTE: Changed to "*" for initial testing, please set this to your frontend domain in production!
     allow_credentials=True,
     allow_methods=[""],
     allow_headers=[""],
