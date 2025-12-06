@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+Import React, { useState, useEffect } from 'react';
 // IMPORTANT: Added XCircle and RefreshCw to imports for the error/loading states
 import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle, Trash2, XCircle, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
@@ -120,15 +120,21 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                     }
                 })
                 .catch(e => {
-                    const errorMessage = e.message || "An unknown error occurred.";
+                    // 💥 CRITICAL FIX: Robustly extract the error message from various possible error structures
+                    const errorMessage = 
+                        e.message || 
+                        e.response?.data?.message || // For Axios or similar library wrappers
+                        e.toString() ||              // Fallback to the object's string representation
+                        "An unknown error occurred.";
+
                     console.error("Failed to load quiz questions:", errorMessage);
                     
-                    // 💥 CRITICAL FIX: Check for the backend's specific anti-cheating message
+                    // Check for the backend's specific anti-cheating message
                     if (errorMessage.includes("Quiz already completed")) {
-                        // Use a dedicated status (null loadError) to trigger the CompletedState component
+                        // Use a dedicated status (COMPLETED) to trigger the CompletedState component
                         setLoadError("COMPLETED"); 
                     } else {
-                        // 🟢 Display the actual error message for debugging
+                        // Display the actual error message for debugging
                         setLoadError(`Quiz Load Error: ${errorMessage}`); 
                     }
                 });
