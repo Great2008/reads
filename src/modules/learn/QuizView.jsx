@@ -38,7 +38,7 @@ const ResultSummary = ({ result, lessonTitle, onNavigate }) => {
                 <h3 className="text-3xl font-bold dark:text-white">{passed ? "Congratulations!" : "Quiz Failed"}</h3>
                 <p className="text-gray-600 dark:text-gray-400">Results for: **{lessonTitle}**</p>
             </div>
-
+            
             <div className="grid grid-cols-3 gap-4 text-center border-b pb-4">
                 <StatCard label="Score" value={`${result.score}%`} color={passed ? 'text-green-500' : 'text-red-500'} />
                 <StatCard label="Correct" value={result.correct} color="text-indigo-500" />
@@ -87,10 +87,10 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
             } catch (err) {
                 const message = err.message || 'An unknown API error occurred.';
                 console.error("Quiz fetch error:", message);
-
-                // 💥 THE FINAL, ROBUST FIX: Use case-insensitive inclusion check.
-                // This will catch the error even if it is wrapped in extra text or spaces.
-                if (message.toLowerCase().includes('quizalreadycompleted')) {
+                
+                // 💥 CRITICAL FIX: Check for the exact custom error message thrown by Api.js
+                // The message is 'QuizAlreadyCompleted'
+                if (message === 'QuizAlreadyCompleted') {
                     setStatus('completed');
                 } else {
                     setErrorMessage(message); // Capture the actual error message
@@ -115,7 +115,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
     const handleSubmit = async () => {
         setStatus('loading');
         setErrorMessage('');
-
+        
         const submissionBody = {
             lesson_id: lessonId,
             answers: Object.entries(answers).map(([question_id, selected]) => ({
@@ -123,10 +123,10 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                 selected: selected
             }))
         };
-
+        
         try {
             const result = await api.learn.submitQuiz(lessonId, submissionBody.answers);
-
+            
             // Update wallet balance if tokens were awarded
             if (result.tokens_awarded > 0) {
                 onUpdateWallet(result.tokens_awarded); 
@@ -153,7 +153,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
         // This handles the correct 409 response gracefully
         return <CompletedState lessonTitle={lessonTitle} onNavigate={onNavigate} />;
     }
-
+    
     if (status === 'results' && submissionResult) {
         return <ResultSummary result={submissionResult} lessonTitle={lessonTitle} onNavigate={onNavigate} />;
     }
@@ -195,13 +195,13 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                         <p className="font-semibold text-lg dark:text-white mb-4">
                             {index + 1}. {q.question}
                         </p>
-
+                        
                         <div className="space-y-3">
                             {/* Assuming options is an array of strings in the format: ["A. Option text", "B. Option text"] */}
                             {q.options.map(option => {
                                 const optionKey = option.split('. ')[0]; // Extracts 'A', 'B', 'C', or 'D'
                                 const isSelected = answers[q.id] === optionKey;
-
+                                
                                 return (
                                     <button
                                         key={option}

@@ -26,17 +26,11 @@ const handleFailedResponse = async (res, action) => {
     }
 
     try {
-        // Clone the response to avoid body stream already read error
-        const contentType = res.headers.get('content-type');
-        if (contentType?.includes('application/json')) {
-            const data = await res.clone().json();
-            errorDetail = data.detail || errorDetail;
-        } else {
-            const text = await res.clone().text();
-            errorDetail = `${errorDetail}. Server response: ${text.substring(0, 100)}...`;
-        }
+        const data = await res.json();
+        errorDetail = data.detail || errorDetail;
     } catch (e) {
-        console.warn(`Could not parse error response: ${e.message}`);
+        const text = await res.text();
+        errorDetail = `${errorDetail}. Server response: ${text.substring(0, 100)}...`; 
     }
     
     console.error(`${action} Failed: ${errorDetail}`); 
@@ -62,21 +56,17 @@ export const api = {
             return data; 
         },
         signup: async (name, email, password) => {
-            console.log('Signup attempt:', { name, email });
             const res = await fetch(`${API_URL}/auth/signup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, password })
             });
             
-            console.log('Signup response status:', res.status);
-            
             if (!res.ok) {
                 await handleFailedResponse(res, 'Signup');
             }
             
             const data = await res.json();
-            console.log('Signup success:', { id: data.access_token?.substring(0, 20) });
             localStorage.setItem('access_token', data.access_token);
             return data;
         },
