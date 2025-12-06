@@ -23,16 +23,20 @@ const InputField = ({ label, type, name, value, onChange, placeholder, required 
 const SignupForm = ({ onLoginSuccess, onNavigate }) => {
     const [formData, setFormData] = useState({ name: '', email: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+        setError(''); // Clear error when user types
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
+        setError('');
 
         try {
+            console.log('Form submitted with:', formData);
             // This calls the API, which now handles error alerting
             await api.auth.signup(formData.name, formData.email, formData.password);
             
@@ -40,7 +44,8 @@ const SignupForm = ({ onLoginSuccess, onNavigate }) => {
             onLoginSuccess(); 
             // -----------------------------
         } catch (error) {
-            console.error(error);
+            console.error('Signup error:', error);
+            setError(error.message || 'Signup failed. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -48,6 +53,11 @@ const SignupForm = ({ onLoginSuccess, onNavigate }) => {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+                <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                    {error}
+                </div>
+            )}
             <InputField
                 label="Full Name"
                 type="text"

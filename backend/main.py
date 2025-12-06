@@ -7,9 +7,17 @@ from datetime import datetime
 from uuid import UUID
 import uuid
 import os
+import sys
 
-# CRITICAL FIX: Use relative imports for Vercel runtime environment
-from .app import models, schemas, auth, database
+# Add app directory to path for development
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
+
+# Import from app package
+try:
+    from app import models, schemas, auth, database
+except ImportError:
+    # Fallback for Vercel deployment
+    from .app import models, schemas, auth, database
 
 # Initialize DB - WRAP THIS IN A TRY/EXCEPT BLOCK
 
@@ -28,8 +36,13 @@ print("FastAPI app initialized with root_path=/api")
 
 app.add_middleware(
     CORSMiddleware,
-    # Updated to the specific Vercel domain for security
-    allow_origins=["https://reads-phi.vercel.app"],
+    # Allow both production domain and localhost for development
+    allow_origins=[
+        "https://reads-phi.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
