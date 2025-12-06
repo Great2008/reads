@@ -19,28 +19,33 @@ const InputField = ({ label, type, name, value, onChange, placeholder, required 
     </div>
 );
 
-// --- 1. Signup Form ---
+// ----------------------------------------------------
+// --- 1. Signup Form (Updated with Error Handling) ---
+// ----------------------------------------------------
 const SignupForm = ({ onLoginSuccess, onNavigate }) => {
     const [formData, setFormData] = useState({ name: '', email: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState(''); // NEW: Error state
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+        if (errorMessage) setErrorMessage(''); // Clear error on new input
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
+        setErrorMessage(''); // Reset error before submission
 
         try {
-            // This calls the API, which now handles error alerting
             await api.auth.signup(formData.name, formData.email, formData.password);
             
-            // --- CRITICAL SUCCESS STATE ---
             onLoginSuccess(); 
-            // -----------------------------
         } catch (error) {
-            console.error(error);
+            console.error("Signup failed:", error);
+            // CATCH ERROR AND SET MESSAGE
+            const message = error.message || "An unexpected signup error occurred. Please try again.";
+            setErrorMessage(message); 
         } finally {
             setIsLoading(false);
         }
@@ -48,6 +53,13 @@ const SignupForm = ({ onLoginSuccess, onNavigate }) => {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Display Error Message */}
+            {errorMessage && (
+                <div className="p-3 bg-red-100 dark:bg-red-900 border border-red-400 rounded-lg text-red-700 dark:text-red-300 text-sm">
+                    {errorMessage}
+                </div>
+            )}
+            
             <InputField
                 label="Full Name"
                 type="text"
@@ -70,51 +82,77 @@ const SignupForm = ({ onLoginSuccess, onNavigate }) => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="********"
+                placeholder="Secure Password"
             />
+
             <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 mt-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                className={`w-full px-4 py-3 text-lg font-semibold rounded-xl transition-colors ${
+                    isLoading
+                        ? 'bg-indigo-400 cursor-not-allowed'
+                        : 'bg-indigo-600 hover:bg-indigo-700'
+                } text-white`}
             >
                 {isLoading ? 'Creating Account...' : 'Sign Up'}
             </button>
-            <button
-                type="button"
-                onClick={() => onNavigate('login')}
-                className="w-full text-sm text-gray-500 hover:underline mt-4"
-            >
-                Already have an account? Log In
-            </button>
+            <p className="text-center text-sm">
+                Already have an account?{' '}
+                <a 
+                    href="#" 
+                    onClick={() => onNavigate('auth', 'login')}
+                    className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                >
+                    Sign In
+                </a>
+            </p>
         </form>
     );
 };
 
-// --- 2. Login Form ---
+// ----------------------------------------------------
+// --- 2. Login Form (ADDED/FIXED) ---
+// ----------------------------------------------------
 const LoginForm = ({ onLoginSuccess, onNavigate }) => {
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState(''); // NEW: Error state
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+        if (errorMessage) setErrorMessage(''); // Clear error on new input
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
+        setErrorMessage(''); // Reset error before submission
 
         try {
             await api.auth.login(formData.email, formData.password);
             onLoginSuccess();
         } catch (error) {
-            console.error(error);
+            console.error("Login failed:", error);
+            
+            // CATCH ERROR AND SET MESSAGE
+            // This is where the backend's "Incorrect username or password" detail will be caught
+            const message = error.message || "An unexpected login error occurred. Please try again.";
+            setErrorMessage(message); 
         } finally {
+            // CRITICAL FIX: Ensure loading state is always turned off, even on error
             setIsLoading(false);
         }
     };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Display Error Message */}
+            {errorMessage && (
+                <div className="p-3 bg-red-100 dark:bg-red-900 border border-red-400 rounded-lg text-red-700 dark:text-red-300 text-sm">
+                    {errorMessage}
+                </div>
+            )}
+            
             <InputField
                 label="Email Address"
                 type="email"
@@ -129,69 +167,67 @@ const LoginForm = ({ onLoginSuccess, onNavigate }) => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="********"
+                placeholder="Secure Password"
             />
-            <div className="flex justify-end">
-                 <button
-                    type="button"
-                    onClick={() => onNavigate('forgot-password')}
-                    className="text-xs text-indigo-600 hover:text-indigo-700"
-                >
-                    Forgot Password?
-                </button>
-            </div>
+
             <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 mt-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                className={`w-full px-4 py-3 text-lg font-semibold rounded-xl transition-colors ${
+                    isLoading
+                        ? 'bg-indigo-400 cursor-not-allowed'
+                        : 'bg-indigo-600 hover:bg-indigo-700'
+                } text-white`}
             >
-                {isLoading ? 'Signing In...' : 'Log In'}
+                {/* Display correct loading text */}
+                {isLoading ? 'Signing In...' : 'Sign In'}
             </button>
-            <button
-                type="button"
-                onClick={() => onNavigate('signup')}
-                className="w-full text-sm text-gray-500 hover:underline mt-4"
-            >
-                Don't have an account? Sign Up
-            </button>
+
+            <p className="text-center text-sm">
+                <a 
+                    href="#" 
+                    onClick={() => onNavigate('auth', 'forgot-password')}
+                    className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 hover:underline font-medium"
+                >
+                    Forgot Password?
+                </a>
+            </p>
+            <p className="text-center text-sm">
+                Don't have an account?{' '}
+                <a 
+                    href="#" 
+                    onClick={() => onNavigate('auth', 'signup')}
+                    className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                >
+                    Sign Up
+                </a>
+            </p>
         </form>
     );
 };
 
-// --- 3. Forgot Password Form (Stub) ---
+// ----------------------------------------------------
+// --- 3. Forgot Password Form (Placeholder) ---
+// ----------------------------------------------------
 const ForgotPasswordForm = ({ onNavigate }) => (
-    <div className="space-y-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-            Enter your email address and we will send you a link to reset your password.
+    <div className="space-y-4 text-center">
+        <p className='text-gray-600 dark:text-gray-400'>
+            This feature is not yet available. Please contact support to reset your password.
         </p>
-        <InputField
-            label="Email Address"
-            type="email"
-            name="email"
-            placeholder="you@example.com"
-            onChange={() => {}}
-            value=""
-        />
-        <button
-            type="button"
-            className="w-full py-3 mt-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors"
+        <button 
+            onClick={() => onNavigate('auth', 'login')}
+            className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold"
         >
-            Reset Password
+            Back to Sign In
         </button>
-        <div className="text-center pt-2">
-            <button
-                type="button"
-                onClick={() => onNavigate('login')}
-                className="text-xs text-gray-500 hover:underline"
-            >
-                Back to Login
-            </button>
-        </div>
     </div>
 );
 
 
-// --- Main Auth Module Component ---
+// ===================================================================
+// --- MAIN AuthModule COMPONENT ---
+// ===================================================================
+
 export default function AuthModule({ view, onLoginSuccess, onNavigate }) {
     
     let content;
@@ -208,6 +244,7 @@ export default function AuthModule({ view, onLoginSuccess, onNavigate }) {
             break;
         case 'login':
         default:
+            // Ensure 'login' is used for the default case
             content = <LoginForm onLoginSuccess={onLoginSuccess} onNavigate={onNavigate} />;
             title = 'Welcome Back';
             break;
