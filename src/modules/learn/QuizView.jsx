@@ -88,8 +88,9 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                 const message = err.message || 'An unknown API error occurred.';
                 console.error("Quiz fetch error:", message);
 
-                // 💥 CRITICAL FIX: Use exact match and trim for the custom error 'QuizAlreadyCompleted'
-                if (message.trim() === 'QuizAlreadyCompleted') {
+                // 💥 THE FINAL, ROBUST FIX: Use case-insensitive inclusion check.
+                // This will catch the error even if it is wrapped in extra text or spaces.
+                if (message.toLowerCase().includes('quizalreadycompleted')) {
                     setStatus('completed');
                 } else {
                     setErrorMessage(message); // Capture the actual error message
