@@ -28,10 +28,11 @@ print("FastAPI app initialized with root_path=/api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["reads-phi.vercel.app"], # NOTE: Changed to "*" for initial testing, please set this to your frontend domain in production!
+    # Updated to the specific Vercel domain for security
+    allow_origins=["https://reads-phi.vercel.app"],
     allow_credentials=True,
-    allow_methods=[""],
-    allow_headers=[""],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Dependencies
@@ -284,12 +285,15 @@ def get_wallet_history(db: Session = Depends(database.get_db), current_user: mod
     """Returns the recent reward history for the authenticated user, including lesson title."""
 
     # 1. Join Reward with Lesson to get the lesson title  
-    rewards_history = db.query(models.Reward, models.Lesson)\  
-        .join(models.Lesson, models.Reward.lesson_id == models.Lesson.id)\  
-        .filter(models.Reward.user_id == current_user.id)\  
-        .order_by(desc(models.Reward.created_at))\  
-        .limit(20)\  
-        .all()  
+    # FIX: Using parentheses for clean multi-line query to avoid SyntaxError
+    rewards_history = (
+        db.query(models.Reward, models.Lesson)
+        .join(models.Lesson, models.Reward.lesson_id == models.Lesson.id)
+        .filter(models.Reward.user_id == current_user.id)
+        .order_by(desc(models.Reward.created_at))
+        .limit(20)
+        .all()
+    )
           
     # 2. Format the output to match the RewardHistory schema (with lesson_title and type)  
     return [  
