@@ -1,450 +1,519 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
-from typing import List
-from datetime import datetime
-from uuid import UUID
-import uuid
-import os
+Import React, { useState, useEffect } from 'react';
+// IMPORTANT: Added XCircle and RefreshCw to imports for the error/loading states
+import { ChevronRight, ArrowLeft, PlayCircle, Clock, Award, CheckCircle, Trash2, XCircle, RefreshCw } from 'lucide-react';
+import { api } from '../../services/api';
 
-# --- CRITICAL FIX: Use relative imports for Vercel runtime environment ---
-from .app import models, schemas, auth, database
+// ====================================================================
+// --- 0. Helper Components for QuizView (NEWLY ADDED) ---
+// ====================================================================
 
-# Initialize DB - WRAP THIS IN A TRY/EXCEPT BLOCK
-print("Attempting to create database tables...")
-try:
-    models.Base.metadata.create_all(bind=database.engine)
-    print("Database tables initialized successfully (or already exist).")
-except Exception as e:
-    print(f"WARNING: Initial database table creation failed. Error: {e}")
+const LoadingState = ({ message = "Loading..." }) => (
+    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        <RefreshCw size={24} className="mx-auto mb-3 animate-spin text-indigo-500" />
+        <p>{message}</p>
+    </div>
+);
 
-
-# --- Ensure the root_path is set for Vercel routing ---
-app = FastAPI(title="$READS Backend", root_path="/api")
-print("FastAPI app initialized with root_path=/api")
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --- Dependencies ---
-
-def get_current_admin(current_user: models.User = Depends(auth.get_current_user)):
-    """Checks if the authenticated user has admin privileges."""
-    if not current_user.is_admin:
-        # Log the failure reason on the server
-        print(f"ADMIN FAIL: User {current_user.id} tried to access admin route.")
-        raise HTTPException(status_code=403, detail="Admin privileges required")
-    return current_user
+// This component handles the specific 'Quiz already completed' error
+const CompletedState = ({ lessonTitle, onNavigate }) => (
+    <div className="space-y-6 animate-fade-in p-8 bg-green-50 dark:bg-slate-800 rounded-2xl shadow-lg border-l-4 border-green-500">
+        <CheckCircle size={48} className="text-green-600 mx-auto" />
+        <h3 className="text-2xl font-bold text-center dark:text-white">Quiz Completed!</h3>
+        <p className="text-center text-gray-600 dark:text-gray-400">
+            You have already successfully completed the quiz for **{lessonTitle}** and earned your reward.
+        </p>
+        <button 
+            onClick={() => onNavigate('learn', 'categories')}
+            className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold"
+        >
+            Explore More Lessons
+        </button>
+    </div>
+);
 
 
-# ----------------------------------------------------
-# --- 3.1 AUTHENTICATION & PROFILES ---
-# ----------------------------------------------------
+// ====================================================================
+// --- 1. Lesson Detail View Component (Full Data Expected) ---
+// ====================================================================
 
-@app.post("/auth/signup", response_model=schemas.Token)
-def signup_user(user_data: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    # Check if user already exists
-    if db.query(models.User).filter(models.User.email == user_data.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    # Hash password and create user
-    # First registered user is automatically made admin for easy setup
-    is_first_user = db.query(models.User).count() == 0
+const LessonDetailView = ({ lesson, onNavigate }) => {
     
-    hashed_password = auth.get_password_hash(user_data.password)
-    new_user = models.User(
-        name=user_data.name,
-        email=user_data.email,
-        password_hash=hashed_password,
-        is_admin=is_first_user
-    )
-    db.add(new_user)
-    db.flush() # Flush to get the ID for the wallet
-    
-    # Create associated wallet
-    new_wallet = models.Wallet(user_id=new_user.id, token_balance=50) # Starting balance
-    db.add(new_wallet)
-    db.commit()
-    
-    # Create JWT token
-    access_token = auth.create_access_token(
-        data={"sub": str(new_user.id)}
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    const safeContent = (lesson.content || 'Content not available.').replace(/\n/g, '<br/>');
 
+    const getEmbedUrl = (url) => {
+        if (!url) return null;
+        if (url.includes('youtube.com/watch?v=')) {
+            const match = url.match(/[?&]v=([^&]+)/);
+            return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+        }
+        return url.startsWith('http') ? url : `https://www.youtube.com/embed/${url}`;
+    };
 
-@app.post("/auth/login", response_model=schemas.Token)
-def login_for_access_token(login_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
-    
-    # 1. Find user by email
-    user = db.query(models.User).filter(models.User.email == login_data.email).first()
-    
-    # 2. Check if user exists or password matches
-    if not user or not auth.verify_password(login_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        
-    # 3. Create token and return
-    access_token = auth.create_access_token(
-        data={"sub": str(user.id)}
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <button onClick={() => onNavigate('learn', 'list', { name: lesson.category })} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 dark:text-indigo-400 dark:hover:text-indigo-300">
+                <ArrowLeft size={16} className="mr-1" /> Back to Lessons
+            </button>
+            <h2 className="text-3xl font-bold dark:text-white">{lesson.title}</h2>
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+                <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full font-semibold">{lesson.category}</span>
+                <span className="flex items-center dark:text-gray-400"><Clock size={16} className="mr-1" /> Duration: 15 min</span>
+            </div>
 
-
-@app.get("/user/profile", response_model=schemas.UserProfile)
-def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
-    return current_user
-
-@app.get("/user/stats", response_model=schemas.UserStats)
-def get_user_stats(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
-    lessons_completed = db.query(models.LessonProgress).filter(models.LessonProgress.user_id == current_user.id).count()
-    quizzes_taken = db.query(models.QuizResult).filter(models.QuizResult.user_id == current_user.id).count()
-    
-    return schemas.UserStats(
-        lessons_completed=lessons_completed,
-        quizzes_taken=quizzes_taken
-    )
-
-# ----------------------------------------------------
-# --- 3.2 LEARNING CONTENT ---
-# ----------------------------------------------------
-
-@app.get("/lessons/categories", response_model=List[schemas.CategoryResponse])
-def get_categories(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    results = db.query(
-        models.Lesson.category,
-        func.count(models.Lesson.id).label('count')
-    ).group_by(models.Lesson.category).all()
-
-    return [schemas.CategoryResponse(category=r.category, count=r.count) for r in results]
-
-
-@app.get("/lessons/category/{category_name}", response_model=List[schemas.LessonBase])
-def get_lessons_by_category(category_name: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    lessons = db.query(models.Lesson).filter(models.Lesson.category == category_name).order_by(models.Lesson.order_index).all()
-    return lessons
-
-
-@app.get("/lessons/{lesson_id}", response_model=schemas.LessonDetail)
-def get_lesson_detail(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Fetches a specific lesson by ID and records progress."""
-    try:
-        lesson_uuid = UUID(lesson_id)
-    except ValueError as e:
-        print(f"ERROR 400: Invalid Lesson ID format received: '{lesson_id}'. Error: {e}")
-        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
-        
-    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_uuid).first()
-    if not lesson:
-        print(f"ERROR 404: Lesson not found for ID: {lesson_id}")
-        raise HTTPException(status_code=404, detail="Lesson not found")
-
-    # Record progress (upsert logic - simple set completed=True)
-    progress = db.query(models.LessonProgress).filter(
-        models.LessonProgress.user_id == current_user.id,
-        models.LessonProgress.lesson_id == lesson_uuid
-    ).first()
-
-    if not progress:
-        progress = models.LessonProgress(
-            user_id=current_user.id,
-            lesson_id=lesson_uuid,
-            completed=True
-        )
-        db.add(progress)
-        try:
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            print(f"Warning: Failed to record lesson progress for user {current_user.id} and lesson {lesson_uuid}. Error: {e}")
-    
-    return lesson
-
-
-# ----------------------------------------------------
-# --- 3.3 QUIZ SUBMISSION ---
-# ----------------------------------------------------
-
-@app.get("/lessons/{lesson_id}/quiz", response_model=List[schemas.QuizQuestionResponse])
-def get_quiz_questions(lesson_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """
-    Retrieves quiz questions for a lesson, but first checks if the user has already completed the quiz.
-    """
-    try:
-        lesson_uuid = UUID(lesson_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
-
-    # 🚀 NEW LOGIC: Prevent re-taking a completed quiz
-    existing_result = db.query(models.QuizResult).filter(
-        models.QuizResult.user_id == current_user.id,
-        models.QuizResult.lesson_id == lesson_uuid
-    ).first()
-    
-    if existing_result:
-        raise HTTPException(status_code=409, detail="Quiz already completed for this lesson.")
-    # --- END NEW LOGIC ---
-
-    questions = db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).all()
-    if not questions:
-        raise HTTPException(status_code=404, detail="Quiz not found for this lesson")
-    
-    return questions
-
-
-@app.post("/quiz/submit", response_model=schemas.QuizResultResponse)
-def submit_quiz(submission: schemas.QuizSubmitRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    lesson_id = submission.lesson_id
-    
-    # 🚀 NEW LOGIC: Prevent re-submitting a completed quiz
-    existing_result = db.query(models.QuizResult).filter(
-        models.QuizResult.user_id == current_user.id,
-        models.QuizResult.lesson_id == lesson_id
-    ).first()
-    
-    if existing_result:
-        raise HTTPException(status_code=409, detail="Quiz already completed for this lesson.")
-    # --- END NEW LOGIC ---
-    
-    # Fetch all correct answers for the lesson's quiz
-    quiz_questions = db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id).all()
-    if not quiz_questions:
-        raise HTTPException(status_code=404, detail="Quiz questions not found for this lesson")
-        
-    correct_answers = {str(q.id): q.correct_option for q in quiz_questions}
-    
-    correct_count = 0
-    
-    for answer in submission.answers:
-        if str(answer.question_id) in correct_answers and answer.selected == correct_answers[str(answer.question_id)]:
-            correct_count += 1
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700">
+                <h3 className="text-xl font-bold mb-4 dark:text-white">Content Overview</h3>
+                <div 
+                    className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 space-y-4"
+                    dangerouslySetInnerHTML={{ __html: safeContent }} 
+                />
+            </div>
             
-    wrong_count = len(submission.answers) - correct_count
-    total_questions = len(quiz_questions)
+            {lesson.video_url && (
+                <div className="mt-6">
+                    <h3 className="text-xl font-bold mb-3 dark:text-white">Video Lecture</h3>
+                    <iframe
+                        className="w-full aspect-video rounded-xl shadow-lg border border-gray-200 dark:border-slate-700"
+                        src={getEmbedUrl(lesson.video_url)}
+                        title="Video Lecture"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                    ></iframe>
+                </div>
+            )}
 
-    # Scoring and Rewards logic
-    score = int((correct_count / total_questions) * 100) if total_questions > 0 else 0
-    tokens_awarded = 0
+            <button
+                onClick={() => onNavigate('learn', 'quiz', { lessonId: lesson.id, lessonTitle: lesson.title, category: lesson.category })} 
+                className="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 mt-6"
+            >
+                <Award size={20} /> Start Quiz to Earn $READS
+            </button>
+        </div>
+    );
+};
+
+// ====================================================================
+// --- 2. Quiz View Component (FIXED ERROR HANDLING) ---
+// ====================================================================
+
+const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => { 
+    const { lessonId, lessonTitle } = lessonData;
     
-    if score >= 70:
-        tokens_awarded = 100
-        
-        # Award tokens
-        user_wallet = db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
-        if user_wallet:
-            user_wallet.token_balance += tokens_awarded
-        
-        # Record reward history
-        new_reward = models.Reward(
-            user_id=current_user.id,
-            lesson_id=lesson_id,
-            tokens_earned=tokens_awarded
-        )
-        db.add(new_reward)
+    const [questions, setQuestions] = useState([]);
+    const [step, setStep] = useState(0);
+    const [selectedAnswer, setSelectedAnswer] = useState(null);
+    const [answers, setAnswers] = useState({}); 
+    const [quizResult, setQuizResult] = useState(null); 
+    const [isLoading, setIsLoading] = useState(false);
+    // 🟢 NEW: State to track if quiz loading failed due to 500/404 OR 409
+    const [loadError, setLoadError] = useState(null); 
 
-    # Record Quiz Result
-    new_result = models.QuizResult(
-        user_id=current_user.id,
-        lesson_id=lesson_id,
-        score=score,
-        correct_count=correct_count,
-        wrong_count=wrong_count
-    )
-    db.add(new_result)
-    db.commit()
+    useEffect(() => {
+        setLoadError(null); // Reset error state on ID change
+        if (lessonId) {
+            api.learn.getQuizQuestions(lessonId)
+                .then(data => {
+                    if (data && data.length > 0) {
+                        setQuestions(data);
+                    } else {
+                        // Handle case where API returns 200 but no questions
+                        setLoadError("No quiz questions found for this lesson.");
+                    }
+                })
+                .catch(e => {
+                    // 💥 CRITICAL FIX: Robustly extract the error message from various possible error structures
+                    const errorMessage = 
+                        e.message || 
+                        e.response?.data?.message || // For Axios or similar library wrappers
+                        e.toString() ||              // Fallback to the object's string representation
+                        "An unknown error occurred.";
 
-    return {
-        "score": score,
-        "correct": correct_count,
-        "wrong": wrong_count,
-        "tokens_awarded": tokens_awarded
+                    console.error("Failed to load quiz questions:", errorMessage);
+                    
+                    // Check for the backend's specific anti-cheating message
+                    if (errorMessage.includes("Quiz already completed")) {
+                        // Use a dedicated status (COMPLETED) to trigger the CompletedState component
+                        setLoadError("COMPLETED"); 
+                    } else {
+                        // Display the actual error message for debugging
+                        setLoadError(`Quiz Load Error: ${errorMessage}`); 
+                    }
+                });
+        }
+    }, [lessonId]);
+
+    const handleAnswerSelect = (optionChar) => {
+        setSelectedAnswer(optionChar);
+    };
+    
+    const handleNext = async () => {
+        if (selectedAnswer === null) return;
+
+        const currentQuestion = questions[step];
+        
+        const newAnswers = { 
+            ...answers, 
+            [currentQuestion.id]: selectedAnswer 
+        };
+        setAnswers(newAnswers);
+        setSelectedAnswer(null);
+
+        if (step < questions.length - 1) {
+            setStep(step + 1);
+        } else {
+            setIsLoading(true);
+            try {
+                const submissionArray = Object.entries(newAnswers).map(([q_id, selected]) => ({
+                    question_id: q_id,
+                    selected: selected
+                }));
+
+                const result = await api.learn.submitQuiz(lessonId, submissionArray);
+                setQuizResult(result);
+                onUpdateWallet(result.tokens_awarded); 
+            } catch (e) {
+                console.error("Quiz submission failed:", e);
+                setLoadError(`Submission failed. Please check your connection. Error: ${e.message || 'Unknown'}`);
+                setIsLoading(false);
+            } 
+        }
+    };
+    
+    // 💥 NEW: Render the Completed State when the specific error is caught
+    if (loadError === "COMPLETED") {
+        return <CompletedState lessonTitle={lessonTitle} onNavigate={onNavigate} />;
     }
 
-# ----------------------------------------------------
-# --- 3.4 Rewards ---
-# ----------------------------------------------------
+    if (loadError) {
+        return (
+            <div className="text-center p-8 bg-red-50 border border-red-200 rounded-xl shadow-lg dark:bg-red-900/20 dark:border-red-800 animate-fade-in">
+                <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">Quiz Load Error</h2>
+                <p className="text-red-500 dark:text-red-300 mt-2">{loadError}</p>
+                <button 
+                    onClick={() => onNavigate('learn', 'detail', lessonId)} 
+                    className="mt-4 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150"
+                >
+                    <ArrowLeft size={16} className="inline mr-1" /> Back to Lesson
+                </button>
+            </div>
+        );
+    }
 
-@app.get("/wallet/balance", response_model=schemas.TokenBalance)
-def get_wallet_balance(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
-    """Fetches the token balance for the current user."""
-    # Assuming the user object includes a 'wallet' relationship or loading the wallet
-    wallet = db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
-    if not wallet:
-         raise HTTPException(status_code=404, detail="Wallet not found")
-
-    return {"token_balance": wallet.token_balance}
-
-@app.get("/wallet/history", response_model=List[schemas.RewardHistory])
-def get_wallet_history(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Returns the recent reward history for the authenticated user, including lesson title."""
+    if (isLoading || (!questions.length && !quizResult)) {
+        return <LoadingState message={isLoading ? "Submitting Quiz and Calculating Rewards..." : `Loading quiz questions for "${lessonTitle}"...`} />;
+    }
     
-    # 1. Join Reward with Lesson to get the lesson title
-    rewards_history = db.query(models.Reward, models.Lesson)\
-        .join(models.Lesson, models.Reward.lesson_id == models.Lesson.id)\
-        .filter(models.Reward.user_id == current_user.id)\
-        .order_by(desc(models.Reward.created_at))\
-        .limit(20)\
-        .all()
+    // Quiz Result View (Remains unchanged)
+    if (quizResult) {
+        const { score, correct, wrong, tokens_awarded } = quizResult;
+        const resultText = score >= 70 ? "Congratulations!" : "Quiz Failed";
+
+        return (
+            <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-xl space-y-6 animate-fade-in border border-gray-100 dark:border-slate-700">
+                <CheckCircle size={60} className={`${score >= 70 ? 'text-green-500' : 'text-red-500'} mx-auto`} />
+                <h2 className="text-3xl font-bold dark:text-white">{resultText}</h2>
+                <p className='text-gray-500 dark:text-gray-400'>You scored {score}% for the **{lessonTitle}** quiz.</p>
+                
+                <div className="grid grid-cols-3 gap-4 text-left">
+                    <div className="p-3 rounded-xl bg-indigo-50 dark:bg-slate-700">
+                        <p className="text-sm text-gray-500">Score</p>
+                        <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{score}%</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-green-50 dark:bg-slate-700">
+                        <p className="text-sm text-gray-500">Correct</p>
+                        <p className="text-2xl font-bold text-green-600">{correct}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-yellow-50 dark:bg-slate-700">
+                        <p className="text-sm text-gray-500">Tokens Earned</p>
+                        <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{tokens_awarded} TKN</p>
+                    </div>
+                </div>
+
+                <button onClick={() => onNavigate('wallet')} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold mb-3 hover:bg-indigo-700 transition-colors">
+                    Check Wallet
+                </button>
+                <button onClick={() => onNavigate('learn', 'categories')} className="text-gray-500 text-sm hover:underline dark:text-gray-400">
+                    Back to Courses
+                </button>
+            </div>
+        );
+    }
+
+    // Current Question View (Remains unchanged)
+    const currentQuestion = questions[step];
+    const optionChars = ['A', 'B', 'C', 'D'];
+
+    return (
+        <div className="animate-fade-in">
+            <button 
+                onClick={() => onNavigate('learn', 'detail', lessonId)} 
+                className="flex items-center text-gray-500 hover:text-gray-700 text-sm font-medium mb-6 dark:text-gray-400"
+            >
+                <ArrowLeft size={16} className="mr-1" /> Back to Lesson
+            </button>
+
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold dark:text-white">Question {step + 1}/{questions.length}</h3>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-8 dark:bg-slate-700">
+                <div 
+                    style={{width: `${((step + 1) / questions.length) * 100}%`}} 
+                    className="h-2 bg-indigo-600 rounded-full transition-all duration-300" 
+                />
+            </div>
+            
+            <h2 className="text-xl font-bold mb-8 dark:text-white">{currentQuestion.question}</h2>
+            
+            <div className="space-y-3">
+                {currentQuestion.options.map((opt, i) => {
+                    const optionChar = optionChars[i];
+                    const isSelected = selectedAnswer === optionChar;
+                    return (
+                        <button 
+                            key={optionChar} 
+                            onClick={() => handleAnswerSelect(optionChar)} 
+                            className={`w-full text-left p-4 rounded-xl transition-all border-2 
+                                ${isSelected 
+                                    ? 'bg-indigo-50 border-indigo-500 ring-4 ring-indigo-100 dark:bg-indigo-900/50 dark:border-indigo-400' 
+                                    : 'bg-white border-gray-200 hover:border-indigo-300 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-indigo-500'}`
+                            }
+                        >
+                            <span className={`font-bold mr-2 w-5 inline-block text-center ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                {optionChar}.
+                            </span> 
+                            <span className='dark:text-white'>{opt}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            <button
+                onClick={handleNext}
+                disabled={selectedAnswer === null || isLoading}
+                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 mt-8"
+            >
+                {step < questions.length - 1 ? 'Next Question' : 'Submit Quiz'}
+            </button>
+        </div>
+    );
+};
+
+// ====================================================================
+// --- 3. Lesson Data Loader (Wrapper Component) ---
+// ====================================================================
+
+const LessonDataLoader = ({ lessonId, onNavigate }) => {
+    const [lessonData, setLessonData] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        setLoading(true);
+        const fetchDetail = async () => {
+            if (!lessonId) {
+                setLoading(false);
+                return;
+            }
+            try {
+                const data = await api.learn.getLessonDetail(lessonId); 
+                setLessonData(data);
+            } catch (error) {
+                console.error("Error fetching lesson detail:", error);
+                setLessonData(null); 
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDetail();
+    }, [lessonId]);
+
+    if (loading) {
+        return <div className="p-8 text-center dark:text-white">Fetching lesson details...</div>;
+    }
+
+    if (!lessonData) {
+        return (
+            <div className="text-center p-8 bg-red-50 border border-red-200 rounded-xl dark:bg-red-900/20 dark:border-red-800">
+                <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">Error Loading Lesson</h2>
+                <p className="text-red-500 dark:text-red-300 mt-2">The lesson details could not be found or loaded.</p>
+                <button 
+                    onClick={() => onNavigate('learn', 'categories')} 
+                    className="mt-4 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150"
+                >
+                    Go Back to Categories
+                </button>
+            </div>
+        );
+    }
+    
+    return <LessonDetailView lesson={lessonData} onNavigate={onNavigate} />;
+};
+
+
+// ====================================================================
+// --- 4. Main Learn Module ---
+// ====================================================================
+
+// 🟢 NEW PROP: Added isAdmin to enable admin features
+export default function LearnModule({ subView, activeData, onNavigate, onUpdateWallet, isAdmin = false }) {
+    const [categories, setCategories] = useState([]);
+    const [lessons, setLessons] = useState([]);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Fetch Categories once on mount
+    useEffect(() => {
+        if (!categories.length) {
+            api.learn.getCategories().then(setCategories);
+        }
+    }, [categories.length]);
+
+    // Fetch Lessons when switching to the 'list' subView
+    const fetchLessons = (categoryName) => {
+        api.learn.getLessons(categoryName).then(setLessons).catch(e => {
+            console.error("Failed to load lessons:", e);
+            setLessons([]); // Clear lessons on failure
+        });
+    }
+
+    useEffect(() => {
+        if (subView === 'list' && activeData?.name) {
+            fetchLessons(activeData.name);
+        }
+    }, [subView, activeData]);
+
+    // 🟢 NEW: Admin Delete Handler
+    const handleDeleteLesson = async (lessonId, lessonTitle, categoryName) => {
+        if (!isAdmin) return;
         
-    # 2. Format the output to match the RewardHistory schema (with lesson_title and type)
-    return [
-        schemas.RewardHistory(
-            id=reward.id,
-            lesson_title=lesson.title,
-            tokens_earned=reward.tokens_earned,
-            created_at=reward.created_at,
-            type="Reward" # Matches the expected type in WalletModule.jsx
-        )
-        for reward, lesson in rewards_history
-    ]
+        // Custom confirmation prompt instead of alert/confirm
+        if (!window.confirm(`Are you sure you want to permanently delete the lesson: "${lessonTitle}"?`)) {
+            return;
+        }
 
-@app.get("/rewards/summary", response_model=schemas.RewardSummary)
-def reward_summary(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    total = db.query(func.sum(models.Reward.tokens_earned)).filter(models.Reward.user_id == current_user.id).scalar() or 0
-    
-    return schemas.RewardSummary(
-        total_tokens_earned=total,
-        total_quizzes_passed=db.query(models.Reward).filter(models.Reward.user_id == current_user.id).count()
-    )
+        setIsDeleting(true);
+        try {
+            await api.admin.deleteLesson(lessonId);
+            // 1. Show success message (log is fine for now)
+            console.log(`Lesson ${lessonId} deleted successfully.`);
+            // 2. Refresh the lesson list
+            fetchLessons(categoryName);
+        } catch (error) {
+            console.error("Failed to delete lesson:", error);
+            alert("Failed to delete lesson. Check API permissions."); // Fallback message
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
-# ----------------------------------------------------
-# --- 4. ADMIN ENDPOINTS (Requires get_current_admin) ---
-# ----------------------------------------------------
 
-@app.get("/admin/users", response_model=List[schemas.UserProfile])
-def get_users(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Fetches all user profiles (Admin Only)."""
-    return db.query(models.User).all()
+    // 1. Categories View (Unchanged)
+    if (subView === 'categories') {
+        return (
+            <div className="space-y-6 animate-fade-in">
+                <h2 className="text-3xl font-bold dark:text-white">Choose a Category</h2>
+                <p className="text-gray-600 dark:text-gray-400">Select a course category to view available lessons and quizzes.</p>
+                <div className="grid gap-4">
+                    {categories.map(cat => (
+                        <button 
+                            key={cat.id} 
+                            onClick={() => onNavigate('learn', 'list', cat)} 
+                            className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-md flex items-center justify-between group hover:ring-2 hover:ring-indigo-500 transition-all border border-gray-100 dark:border-slate-700"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold ${cat.color} text-xl`}>
+                                    {cat.name.substring(0, 1)}
+                                </div>
+                                <div className='text-left'>
+                                    <h3 className="font-bold text-lg dark:text-white">{cat.name}</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">{cat.count} lessons available</p>
+                                </div>
+                            </div>
+                            <ChevronRight size={20} className="text-indigo-500 group-hover:translate-x-1 transition-transform" />
+                        </button>
+                    ))}
+                    {categories.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400">No categories found.</p>}
+                </div>
+            </div>
+        );
+    }
 
-@app.put("/admin/users/{user_id}/promote", status_code=status.HTTP_200_OK)
-def promote_user(user_id: str, is_admin: bool, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Promotes/Demotes a user by setting is_admin flag (Admin Only)."""
-    try:
-        user_uuid = UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    // 2. Lesson List View (Updated for Admin Delete)
+    if (subView === 'list') {
+        const category = activeData?.name || 'Lessons';
         
-    # Prevent admin from changing their own status
-    if user_uuid == current_admin.id:
-        raise HTTPException(status_code=400, detail="You cannot change your own admin status.")
-        
-    user = db.query(models.User).filter(models.User.id == user_uuid).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    user.is_admin = is_admin
-    db.commit()
-    return {"message": f"User {user.name} admin status set to {is_admin}"}
+        if (isDeleting) {
+            return <div className="p-8 text-center dark:text-white">Deleting lesson... Please wait.</div>;
+        }
 
-@app.get("/admin/lessons", response_model=List[schemas.LessonBase])
-def get_all_lessons(db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Returns a list of all lessons for Admin Content Management (Admin Only)."""
-    lessons = db.query(models.Lesson).order_by(models.Lesson.category, models.Lesson.order_index).all()
-    return lessons
+        return (
+            <div className="space-y-6 animate-fade-in">
+                <button onClick={() => onNavigate('learn', 'categories')} className="flex items-center text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 dark:text-indigo-400 dark:hover:text-indigo-300">
+                    <ArrowLeft size={16} className="mr-1" /> Back to Categories
+                </button>
+                <h2 className="text-3xl font-bold dark:text-white">{category} Lessons {isAdmin && <span className="text-sm text-red-500">(Admin Mode)</span>}</h2>
+                <div className="space-y-3">
+                    {lessons.map(lesson => (
+                        <div 
+                            key={lesson.id} 
+                            className="w-full bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm flex items-center justify-between group transition-all border border-gray-100 dark:border-slate-700"
+                        >
+                            <button
+                                // Content area button
+                                onClick={() => onNavigate('learn', 'detail', lesson.id)}
+                                className="flex items-center gap-4 flex-grow p-2 text-left"
+                            >
+                                <PlayCircle size={28} className="text-indigo-500 group-hover:text-indigo-600 transition-colors" />
+                                <div>
+                                    <h3 className="font-bold dark:text-white">{lesson.title}</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center mt-1">
+                                        <Clock size={12} className="mr-1" /> {lesson.duration || 'N/A'}
+                                    </p>
+                                </div>
+                            </button>
 
-@app.post("/admin/lessons", response_model=schemas.LessonDetail, status_code=status.HTTP_201_CREATED)
-def create_lesson(lesson_data: schemas.LessonCreate, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Creates a new lesson (Admin Only)."""
-    new_lesson = models.Lesson(**lesson_data.model_dump())
-    db.add(new_lesson)
-    db.commit()
-    db.refresh(new_lesson)
-    return new_lesson
+                            <div className="flex items-center">
+                                {/* 🟢 Admin Delete Button */}
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => handleDeleteLesson(lesson.id, lesson.title, lesson.category)}
+                                        className="p-2 ml-2 text-red-500 hover:text-red-700 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                                        title={`Delete ${lesson.title}`}
+                                        disabled={isDeleting}
+                                    >
+                                        <Trash2 size={20} />
+                                    </button>
+                                )}
+                                <ChevronRight size={20} className="text-gray-400 transition-transform ml-2" />
+                            </div>
+                        </div>
+                    ))}
+                    {lessons.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400">No lessons found for this category.</p>}
+                </div>
+            </div>
+        );
+    }
 
-# DELETE /admin/lessons/{lesson_id}
-@app.delete("/admin/lessons/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_lesson(lesson_id: str, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Deletes a lesson and all associated records (Admin Only)."""
-    
-    try:
-        lesson_uuid = UUID(lesson_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
-    
-    # 1. Find the lesson
-    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_uuid).first()
-    if not lesson:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
-        
-    # 2. Delete ALL dependent records explicitly
-    db.query(models.LessonProgress).filter(models.LessonProgress.lesson_id == lesson_uuid).delete(synchronize_session=False)
-    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).delete(synchronize_session=False)
-    db.query(models.QuizResult).filter(models.QuizResult.lesson_id == lesson_uuid).delete(synchronize_session=False)
-    db.query(models.Reward).filter(models.Reward.lesson_id == lesson_uuid).delete(synchronize_session=False)
-    
-    # 3. Delete the main Lesson
-    db.delete(lesson)
-    
-    # 4. Commit all deletions
-    db.commit()
-    
-    return 
+    // 3. Lesson Detail View
+    if (subView === 'detail') {
+        // activeData is now expected to be just the lesson ID string
+        return <LessonDataLoader lessonId={activeData} onNavigate={onNavigate} />;
+    }
 
+    // 4. Quiz View
+    if (subView === 'quiz') {
+        // activeData is an object: { lessonId, lessonTitle, category }
+        return <QuizView lessonData={activeData} onNavigate={onNavigate} onUpdateWallet={onUpdateWallet} />;
+    }
 
-@app.post("/admin/quiz", status_code=status.HTTP_201_CREATED)
-def upload_quiz(quiz_request: schemas.QuizCreateRequest, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Creates/Updates the quiz questions for a lesson (Admin Only)."""
-    
-    lesson_id = quiz_request.lesson_id
-    lesson_id_str = str(lesson_id)
-    
-    # 1. Verify Lesson exists
-    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id).first()
-    
-    if not lesson:
-        print(f"Quiz Upload Fail (404): Lesson ID {lesson_id_str} not found.")
-        raise HTTPException(status_code=404, detail="Lesson not found for quiz association")
-
-    # 2. Delete existing quiz questions for this lesson (to ensure clean update/overwrite)
-    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_id).delete(synchronize_session=False)
-
-    # 3. Insert new questions
-    new_questions = []
-    for q_data in quiz_request.questions:
-             
-        new_q = models.QuizQuestion(
-            lesson_id=lesson_id, 
-            question=q_data.question,
-            options=q_data.options,
-            correct_option=q_data.correct_option
-        )
-        new_questions.append(new_q)
-    
-    db.add_all(new_questions)
-    
-    # 4. Attempt commit and handle potential database errors
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Database error (500) during quiz upload: {e}")
-        raise HTTPException(status_code=500, detail="Database integrity error during quiz save.")
-    
-    return {"message": f"Successfully added {len(new_questions)} quiz questions for lesson {lesson_id_str}"}
-
-
-# DELETE /admin/quiz/{lesson_id}
-@app.delete("/admin/quiz/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_quiz(lesson_id: str, db: Session = Depends(database.get_db), current_admin: models.User = Depends(get_current_admin)):
-    """Deletes all quiz questions associated with a lesson (Admin Only)."""
-    
-    try:
-        lesson_uuid = UUID(lesson_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid lesson ID format")
-        
-    # Delete Quiz Questions
-    db.query(models.QuizQuestion).filter(models.QuizQuestion.lesson_id == lesson_uuid).delete(synchronize_session=False)
-    db.commit()
-        
-    return
+    // Default Fallback
+    return (
+        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+            <p>Welcome to the learning module. Please select a category to begin.</p>
+            <button 
+                onClick={() => onNavigate('learn', 'categories')}
+                className="mt-4 text-indigo-600 hover:underline"
+            >
+                View Categories
+            </button>
+        </div>
+    );
+}
