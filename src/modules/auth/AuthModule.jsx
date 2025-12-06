@@ -19,54 +19,28 @@ const InputField = ({ label, type, name, value, onChange, placeholder, required 
     </div>
 );
 
-// ----------------------------------------------------
-// --- 1. Signup Form (Updated with Error Handling) ---
-// ----------------------------------------------------
+// --- 1. Signup Form ---
 const SignupForm = ({ onLoginSuccess, onNavigate }) => {
     const [formData, setFormData] = useState({ name: '', email: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
-<<<<<<< HEAD
-    const [error, setError] = useState('');
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
-        setError(''); // Clear error when user types
-=======
-    const [errorMessage, setErrorMessage] = useState(''); // NEW: Error state
-
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-        if (errorMessage) setErrorMessage(''); // Clear error on new input
->>>>>>> c869aa8b89ee01ddacaac4e1625e519cffbe802a
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-<<<<<<< HEAD
-        setError('');
 
         try {
-            console.log('Form submitted with:', formData);
             // This calls the API, which now handles error alerting
-=======
-        setErrorMessage(''); // Reset error before submission
-
-        try {
->>>>>>> c869aa8b89ee01ddacaac4e1625e519cffbe802a
             await api.auth.signup(formData.name, formData.email, formData.password);
             
+            // --- CRITICAL SUCCESS STATE ---
             onLoginSuccess(); 
+            // -----------------------------
         } catch (error) {
-<<<<<<< HEAD
-            console.error('Signup error:', error);
-            setError(error.message || 'Signup failed. Please try again.');
-=======
-            console.error("Signup failed:", error);
-            // CATCH ERROR AND SET MESSAGE
-            const message = error.message || "An unexpected signup error occurred. Please try again.";
-            setErrorMessage(message); 
->>>>>>> c869aa8b89ee01ddacaac4e1625e519cffbe802a
+            console.error(error);
         } finally {
             setIsLoading(false);
         }
@@ -74,21 +48,6 @@ const SignupForm = ({ onLoginSuccess, onNavigate }) => {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-<<<<<<< HEAD
-            {error && (
-                <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
-                    {error}
-                </div>
-            )}
-=======
-            {/* Display Error Message */}
-            {errorMessage && (
-                <div className="p-3 bg-red-100 dark:bg-red-900 border border-red-400 rounded-lg text-red-700 dark:text-red-300 text-sm">
-                    {errorMessage}
-                </div>
-            )}
-            
->>>>>>> c869aa8b89ee01ddacaac4e1625e519cffbe802a
             <InputField
                 label="Full Name"
                 type="text"
@@ -111,77 +70,51 @@ const SignupForm = ({ onLoginSuccess, onNavigate }) => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="Secure Password"
+                placeholder="********"
             />
-
             <button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full px-4 py-3 text-lg font-semibold rounded-xl transition-colors ${
-                    isLoading
-                        ? 'bg-indigo-400 cursor-not-allowed'
-                        : 'bg-indigo-600 hover:bg-indigo-700'
-                } text-white`}
+                className="w-full py-3 mt-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
                 {isLoading ? 'Creating Account...' : 'Sign Up'}
             </button>
-            <p className="text-center text-sm">
-                Already have an account?{' '}
-                <a 
-                    href="#" 
-                    onClick={() => onNavigate('auth', 'login')}
-                    className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-                >
-                    Sign In
-                </a>
-            </p>
+            <button
+                type="button"
+                onClick={() => onNavigate('login')}
+                className="w-full text-sm text-gray-500 hover:underline mt-4"
+            >
+                Already have an account? Log In
+            </button>
         </form>
     );
 };
 
-// ----------------------------------------------------
-// --- 2. Login Form (ADDED/FIXED) ---
-// ----------------------------------------------------
+// --- 2. Login Form ---
 const LoginForm = ({ onLoginSuccess, onNavigate }) => {
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
-    const [errorMessage, setErrorMessage] = useState(''); // NEW: Error state
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
-        if (errorMessage) setErrorMessage(''); // Clear error on new input
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        setErrorMessage(''); // Reset error before submission
 
         try {
             await api.auth.login(formData.email, formData.password);
             onLoginSuccess();
         } catch (error) {
-            console.error("Login failed:", error);
-            
-            // CATCH ERROR AND SET MESSAGE
-            // This is where the backend's "Incorrect username or password" detail will be caught
-            const message = error.message || "An unexpected login error occurred. Please try again.";
-            setErrorMessage(message); 
+            console.error(error);
         } finally {
-            // CRITICAL FIX: Ensure loading state is always turned off, even on error
             setIsLoading(false);
         }
     };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Display Error Message */}
-            {errorMessage && (
-                <div className="p-3 bg-red-100 dark:bg-red-900 border border-red-400 rounded-lg text-red-700 dark:text-red-300 text-sm">
-                    {errorMessage}
-                </div>
-            )}
-            
             <InputField
                 label="Email Address"
                 type="email"
@@ -196,67 +129,69 @@ const LoginForm = ({ onLoginSuccess, onNavigate }) => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="Secure Password"
+                placeholder="********"
             />
-
+            <div className="flex justify-end">
+                 <button
+                    type="button"
+                    onClick={() => onNavigate('forgot-password')}
+                    className="text-xs text-indigo-600 hover:text-indigo-700"
+                >
+                    Forgot Password?
+                </button>
+            </div>
             <button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full px-4 py-3 text-lg font-semibold rounded-xl transition-colors ${
-                    isLoading
-                        ? 'bg-indigo-400 cursor-not-allowed'
-                        : 'bg-indigo-600 hover:bg-indigo-700'
-                } text-white`}
+                className="w-full py-3 mt-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-                {/* Display correct loading text */}
-                {isLoading ? 'Signing In...' : 'Sign In'}
+                {isLoading ? 'Signing In...' : 'Log In'}
             </button>
-
-            <p className="text-center text-sm">
-                <a 
-                    href="#" 
-                    onClick={() => onNavigate('auth', 'forgot-password')}
-                    className="text-gray-500 hover:text-indigo-600 dark:text-gray-400 hover:underline font-medium"
-                >
-                    Forgot Password?
-                </a>
-            </p>
-            <p className="text-center text-sm">
-                Don't have an account?{' '}
-                <a 
-                    href="#" 
-                    onClick={() => onNavigate('auth', 'signup')}
-                    className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-                >
-                    Sign Up
-                </a>
-            </p>
+            <button
+                type="button"
+                onClick={() => onNavigate('signup')}
+                className="w-full text-sm text-gray-500 hover:underline mt-4"
+            >
+                Don't have an account? Sign Up
+            </button>
         </form>
     );
 };
 
-// ----------------------------------------------------
-// --- 3. Forgot Password Form (Placeholder) ---
-// ----------------------------------------------------
+// --- 3. Forgot Password Form (Stub) ---
 const ForgotPasswordForm = ({ onNavigate }) => (
-    <div className="space-y-4 text-center">
-        <p className='text-gray-600 dark:text-gray-400'>
-            This feature is not yet available. Please contact support to reset your password.
+    <div className="space-y-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+            Enter your email address and we will send you a link to reset your password.
         </p>
-        <button 
-            onClick={() => onNavigate('auth', 'login')}
-            className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold"
+        <InputField
+            label="Email Address"
+            type="email"
+            name="email"
+            placeholder="you@example.com"
+            onChange={() => {}}
+            value=""
+        />
+        <button
+            type="button"
+            className="w-full py-3 mt-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors"
         >
-            Back to Sign In
+            Reset Password
         </button>
+        <div className="text-center pt-2">
+            <button
+                type="button"
+                onClick={() => onNavigate('login')}
+                className="text-xs text-gray-500 hover:underline"
+            >
+                Back to Login
+            </button>
+        </div>
     </div>
 );
 
 
-// ===================================================================
-// --- MAIN AuthModule COMPONENT ---
-// ===================================================================
-
+// --- Main Auth Module Component ---
 export default function AuthModule({ view, onLoginSuccess, onNavigate }) {
     
     let content;
@@ -273,7 +208,6 @@ export default function AuthModule({ view, onLoginSuccess, onNavigate }) {
             break;
         case 'login':
         default:
-            // Ensure 'login' is used for the default case
             content = <LoginForm onLoginSuccess={onLoginSuccess} onNavigate={onNavigate} />;
             title = 'Welcome Back';
             break;
