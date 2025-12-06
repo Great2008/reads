@@ -38,7 +38,7 @@ const ResultSummary = ({ result, lessonTitle, onNavigate }) => {
                 <h3 className="text-3xl font-bold dark:text-white">{passed ? "Congratulations!" : "Quiz Failed"}</h3>
                 <p className="text-gray-600 dark:text-gray-400">Results for: **{lessonTitle}**</p>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-4 text-center border-b pb-4">
                 <StatCard label="Score" value={`${result.score}%`} color={passed ? 'text-green-500' : 'text-red-500'} />
                 <StatCard label="Correct" value={result.correct} color="text-indigo-500" />
@@ -74,7 +74,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
     const [answers, setAnswers] = useState({}); // { questionId: 'A', questionId2: 'C' }
     const [submissionResult, setSubmissionResult] = useState(null);
     const [status, setStatus] = useState('loading'); // 'loading', 'questions', 'completed', 'results', 'error'
-    const [errorMessage, setErrorMessage] = useState(''); // 🚀 NEW: State to hold specific error message
+    const [errorMessage, setErrorMessage] = useState(''); // State to hold specific error message
 
     useEffect(() => {
         const fetchQuiz = async () => {
@@ -87,9 +87,10 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
             } catch (err) {
                 const message = err.message || 'An unknown API error occurred.';
                 console.error("Quiz fetch error:", message);
-                
-                // 🚀 FIXED LOGIC: Check for the backend's "already completed" error detail
-                if (message.includes("Quiz already completed")) {
+
+                // 💥 THE FINAL, ROBUST FIX: Use case-insensitive inclusion check.
+                // This will catch the error even if it is wrapped in extra text or spaces.
+                if (message.toLowerCase().includes('quizalreadycompleted')) {
                     setStatus('completed');
                 } else {
                     setErrorMessage(message); // Capture the actual error message
@@ -114,7 +115,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
     const handleSubmit = async () => {
         setStatus('loading');
         setErrorMessage('');
-        
+
         const submissionBody = {
             lesson_id: lessonId,
             answers: Object.entries(answers).map(([question_id, selected]) => ({
@@ -122,10 +123,10 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                 selected: selected
             }))
         };
-        
+
         try {
             const result = await api.learn.submitQuiz(lessonId, submissionBody.answers);
-            
+
             // Update wallet balance if tokens were awarded
             if (result.tokens_awarded > 0) {
                 onUpdateWallet(result.tokens_awarded); 
@@ -152,7 +153,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
         // This handles the correct 409 response gracefully
         return <CompletedState lessonTitle={lessonTitle} onNavigate={onNavigate} />;
     }
-    
+
     if (status === 'results' && submissionResult) {
         return <ResultSummary result={submissionResult} lessonTitle={lessonTitle} onNavigate={onNavigate} />;
     }
@@ -162,7 +163,7 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
             <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-xl shadow-lg border-l-4 border-red-500">
                 <XCircle size={24} className="mx-auto mb-3 text-red-500" />
                 <p className='font-bold text-red-600 dark:text-red-400'>Quiz Load Error</p>
-                {/* 🚀 Now displays the exact API error message */}
+                {/* Now displays the exact API error message */}
                 <p className='text-sm text-gray-500 dark:text-gray-400 mt-2'>{errorMessage}</p>
                 <button 
                     onClick={() => { setStatus('loading'); setErrorMessage(''); }} 
@@ -194,13 +195,13 @@ const QuizView = ({ lessonData, onNavigate, onUpdateWallet }) => {
                         <p className="font-semibold text-lg dark:text-white mb-4">
                             {index + 1}. {q.question}
                         </p>
-                        
+
                         <div className="space-y-3">
                             {/* Assuming options is an array of strings in the format: ["A. Option text", "B. Option text"] */}
                             {q.options.map(option => {
                                 const optionKey = option.split('. ')[0]; // Extracts 'A', 'B', 'C', or 'D'
                                 const isSelected = answers[q.id] === optionKey;
-                                
+
                                 return (
                                     <button
                                         key={option}

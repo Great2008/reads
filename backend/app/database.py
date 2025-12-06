@@ -45,10 +45,15 @@ def get_db():
         # PING the DB connection right here to test it early
         db.connection() 
         yield db
+    except HTTPException as http_e:
+        # 💥 CRITICAL FIX: Explicitly catch and re-raise all FastAPI's HTTPExceptions (like 409).
+        # This prevents the correct error from being mistakenly converted to a 500.
+        raise http_e
     except Exception as e:
+        # Only catch and log unexpected, low-level database connection errors.
         # Log the error to the Vercel Function logs
         print(f"FATAL: Database connection error during runtime: {e}")
-        # Raise an explicit 500 so we can track the message if we get lucky
+        # Raise an explicit 500 for true database failures
         raise HTTPException(
             status_code=500,
             detail=f"Internal Server Error: Database connection failed. See Vercel logs for full error."
